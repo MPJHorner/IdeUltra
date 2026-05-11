@@ -10,6 +10,7 @@ mod logging;
 mod markdown;
 mod persistence;
 mod project_search;
+mod recent;
 mod recovery;
 mod ui;
 mod workspace;

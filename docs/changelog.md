@@ -14,6 +14,10 @@ permalink: /changelog.html
   banner now has a **View diff** button. It opens a unified line diff with
   red removals and green additions, showing both the old and new line numbers.
   Reload or Keep mine are available directly from the modal.
+- **Recent files.** `File → Open Recent` shows the last 10 opened files
+  with home-relative paths. The full history (up to 30 entries, deduped,
+  most-recent-first) persists in `session.json`. **Clear Recent** wipes it.
+  Stale entries whose files have been moved or deleted are pruned on launch.
 
 ## v0.2.0 — 2026-05-11
 

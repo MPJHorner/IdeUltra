@@ -12,6 +12,7 @@ use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
 use crate::editor::language::ColorTheme;
+use crate::recent::RecentFiles;
 
 /// User-tunable preferences. Survives across sessions; never touched
 /// during normal editing.
@@ -47,9 +48,11 @@ impl Default for Settings {
 pub struct SessionState {
     pub window: WindowState,
     pub last_folder: Option<PathBuf>,
-    /// Paths only — unsaved buffers are NOT persisted (v0.2 territory).
+    /// Paths only — unsaved buffers live in the recovery store, not here.
     pub open_tabs: Vec<PathBuf>,
     pub active_tab: usize,
+    #[serde(default)]
+    pub recent_files: RecentFiles,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,9 +108,11 @@ pub fn load() -> Loaded {
         .as_ref()
         .and_then(|p| read_json::<SessionState>(&p.session).ok())
         .unwrap_or_default();
+    let mut session = filter_missing_tabs(session);
+    session.recent_files.prune_missing();
     Loaded {
         settings,
-        session: filter_missing_tabs(session),
+        session,
         paths,
     }
 }
@@ -232,6 +237,7 @@ mod tests {
             last_folder: Some(PathBuf::from("/tmp/proj")),
             open_tabs: vec![PathBuf::from("a.rs"), PathBuf::from("b.rs")],
             active_tab: 1,
+            recent_files: Default::default(),
         };
         let bytes = serde_json::to_vec(&sess).unwrap();
         let parsed: SessionState = serde_json::from_slice(&bytes).unwrap();
@@ -253,6 +259,7 @@ mod tests {
             last_folder: None,
             open_tabs: vec![real.clone(), fake],
             active_tab: 1, // points at the fake one
+            recent_files: Default::default(),
         };
         let filtered = super::filter_missing_tabs(sess);
         assert_eq!(filtered.open_tabs, vec![real]);

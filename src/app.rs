@@ -14,6 +14,7 @@ use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::command_palette::CommandId;
 use crate::diff::{line_diff, DiffSummary};
+use crate::recent::RecentFiles;
 use crate::recovery::{Recovery, RecoveryStore, RECOVERY_DEBOUNCE_MS};
 use crate::ui::diff_modal::{self, DiffModalAction};
 use crate::ui::command_palette_modal::{
@@ -64,6 +65,7 @@ pub struct IdeUltraApp {
     markdown_preview: bool,
     /// Active diff modal: (tab index, summary, file name shown in title).
     diff_modal: Option<(usize, DiffSummary, String)>,
+    recent_files: RecentFiles,
 }
 
 impl IdeUltraApp {
@@ -99,6 +101,7 @@ impl IdeUltraApp {
             last_recovery_write: Default::default(),
             markdown_preview: loaded.settings.markdown_preview,
             diff_modal: None,
+            recent_files: loaded.session.recent_files.clone(),
         };
 
         // Surface anything left over from a previous crash / force-quit.
@@ -151,6 +154,7 @@ impl IdeUltraApp {
             last_folder: self.workspace.as_ref().map(|w| w.root.clone()),
             open_tabs: self.tabs.iter().map(|t| t.path.clone()).collect(),
             active_tab: self.active_tab,
+            recent_files: self.recent_files.clone(),
         }
     }
 
@@ -276,6 +280,7 @@ impl IdeUltraApp {
     fn open_file(&mut self, path: &Path) {
         if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
             self.active_tab = idx;
+            self.recent_files.push(path.to_path_buf());
             self.saver.mark_dirty();
             return;
         }
@@ -284,6 +289,7 @@ impl IdeUltraApp {
                 tracing::info!(file = %path.display(), "file opened");
                 self.tabs.push(tab);
                 self.active_tab = self.tabs.len() - 1;
+                self.recent_files.push(path.to_path_buf());
                 self.saver.mark_dirty();
             }
             Err(err) => {
@@ -799,6 +805,16 @@ impl IdeUltraApp {
     }
 }
 
+fn display_recent(path: &Path) -> String {
+    // Show ~/foo/bar.rs instead of /Users/you/foo/bar.rs when possible.
+    if let Some(home) = directories::UserDirs::new() {
+        if let Ok(rel) = path.strip_prefix(home.home_dir()) {
+            return format!("~/{}", rel.display());
+        }
+    }
+    path.display().to_string()
+}
+
 fn is_markdown(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|s| s.to_str()),
@@ -850,6 +866,32 @@ impl eframe::App for IdeUltraApp {
                     if ui.button("Open Folder…  ⇧⌘O").clicked() {
                         ui.close_menu();
                         self.open_folder_dialog();
+                    }
+                    // Open Recent submenu — top 10 MRU entries.
+                    let mut recent_to_open: Option<PathBuf> = None;
+                    ui.menu_button("Open Recent", |ui| {
+                        if self.recent_files.is_empty() {
+                            ui.label(
+                                egui::RichText::new("Nothing yet").small().weak(),
+                            );
+                        } else {
+                            for p in self.recent_files.top(10) {
+                                let label = display_recent(p);
+                                if ui.button(label).clicked() {
+                                    recent_to_open = Some(p.to_path_buf());
+                                    ui.close_menu();
+                                }
+                            }
+                            ui.separator();
+                            if ui.button("Clear Recent").clicked() {
+                                self.recent_files.entries.clear();
+                                self.saver.mark_dirty();
+                                ui.close_menu();
+                            }
+                        }
+                    });
+                    if let Some(p) = recent_to_open {
+                        self.open_file(&p);
                     }
                     ui.separator();
                     if ui.button("Save  ⌘S").clicked() {
