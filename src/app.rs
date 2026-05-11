@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use eframe::CreationContext;
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 
+use crate::editor::language::{language_label, ColorTheme};
 use crate::editor::EditorTab;
 use crate::ui::{
     editor_panel,
@@ -19,6 +20,7 @@ pub struct IdeUltraApp {
     active_tab: usize,
     sidebar_width: f32,
     status_message: Option<(String, std::time::Instant)>,
+    theme: ColorTheme,
 }
 
 impl IdeUltraApp {
@@ -31,6 +33,14 @@ impl IdeUltraApp {
             active_tab: 0,
             sidebar_width: 260.0,
             status_message: None,
+            theme: ColorTheme::Dark,
+        }
+    }
+
+    fn apply_theme(&self, ctx: &Context) {
+        match self.theme {
+            ColorTheme::Dark => ctx.set_visuals(egui::Visuals::dark()),
+            ColorTheme::Light => ctx.set_visuals(egui::Visuals::light()),
         }
     }
 
@@ -207,6 +217,7 @@ impl eframe::App for IdeUltraApp {
         }
 
         self.handle_shortcuts(ctx);
+        self.apply_theme(ctx);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.window_title()));
 
         // ── menu bar ─────────────────────────────────────────────────────
@@ -235,6 +246,18 @@ impl eframe::App for IdeUltraApp {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
+                ui.menu_button("View", |ui| {
+                    ui.label(egui::RichText::new("Theme").small().weak());
+                    for opt in [ColorTheme::Dark, ColorTheme::Light] {
+                        if ui
+                            .radio(self.theme == opt, opt.label())
+                            .clicked()
+                        {
+                            self.theme = opt;
+                            ui.close_menu();
+                        }
+                    }
+                });
                 ui.add_space(8.0);
                 if let Some(ws) = &self.workspace {
                     ui.label(
@@ -251,12 +274,14 @@ impl eframe::App for IdeUltraApp {
             ui.horizontal(|ui| {
                 if let Some(tab) = self.tabs.get(self.active_tab) {
                     let dirty = if tab.is_dirty() { " · modified" } else { "" };
+                    let lang = language_label(tab.syntax());
                     ui.label(
                         egui::RichText::new(format!(
-                            "{}{}  ·  {} bytes",
+                            "{}{}  ·  {} bytes  ·  {}",
                             tab.path.display(),
                             dirty,
-                            tab.buffer.text.len()
+                            tab.buffer.text.len(),
+                            lang,
                         ))
                         .small()
                         .weak(),
@@ -348,8 +373,9 @@ impl eframe::App for IdeUltraApp {
             }
 
             // Editor
+            let theme = self.theme;
             if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                editor_panel::show(ui, tab);
+                editor_panel::show(ui, tab, theme);
             }
         });
     }

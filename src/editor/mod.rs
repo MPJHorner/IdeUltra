@@ -1,15 +1,21 @@
 pub mod buffer;
+pub mod language;
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use syntect::parsing::SyntaxReference;
 
 use self::buffer::Buffer;
+use self::language::{syntax_for_path, SYNTAX_SET};
+use crate::ui::highlight::HighlightCache;
 
 pub struct EditorTab {
     pub path: PathBuf,
     pub buffer: Buffer,
     pub display_name: String,
+    pub syntax_name: String,
+    pub highlight: HighlightCache,
 }
 
 impl EditorTab {
@@ -22,10 +28,13 @@ impl EditorTab {
             .and_then(|s| s.to_str())
             .unwrap_or("untitled")
             .to_string();
+        let syntax = syntax_for_path(&path);
         Ok(Self {
             buffer: Buffer::new(text),
             path,
             display_name,
+            syntax_name: syntax.name.clone(),
+            highlight: HighlightCache::default(),
         })
     }
 
@@ -38,5 +47,11 @@ impl EditorTab {
 
     pub fn is_dirty(&self) -> bool {
         self.buffer.is_dirty()
+    }
+
+    pub fn syntax(&self) -> &'static SyntaxReference {
+        SYNTAX_SET
+            .find_syntax_by_name(&self.syntax_name)
+            .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text())
     }
 }

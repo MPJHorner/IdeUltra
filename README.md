@@ -7,7 +7,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 - Zero telemetry, MIT licensed
 - Built for **speed** — startup under 150ms, keystroke-to-paint under 16ms
 
-> **Status:** first usable MVP. Open a folder, browse files, edit, save. Syntax highlighting and find/replace are next. See [`plan.md`](./plan.md) for the deliverable-ordered roadmap.
+> **Status:** usable MVP with syntax highlighting. Open a folder, browse files, edit, save — colours come for free for 100+ languages via `syntect`. Find/replace is next. See [`plan.md`](./plan.md) for the deliverable-ordered roadmap.
 
 ## Shortcuts
 
@@ -38,8 +38,8 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | D2  | File browser sidebar | shipped |
 | D3  | Editor core (open / edit / save) | shipped |
 | D4  | Tabs | shipped |
-| D5  | Syntax highlighting | next |
-| D6  | Find & replace | |
+| D5  | Syntax highlighting | shipped |
+| D6  | Find & replace | next |
 | D7  | Status bar & shortcuts | |
 | D8  | Persistence | |
 | D9  | File watching | |
