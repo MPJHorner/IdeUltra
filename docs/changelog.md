@@ -3,6 +3,18 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.4.0 — unreleased (on `main`)
+
+- **Auto-save on focus loss.** When the IdeUltra window loses focus,
+  every dirty buffer is saved automatically. Toggle from the command
+  palette ("Settings: Toggle Auto-save on Focus Loss"); the setting
+  persists in `settings.json` (default on). Auto-save clears the
+  corresponding crash-recovery snapshot.
+- **Text transformations** in the command palette: Sort Lines,
+  Sort Lines (Reverse), Unique Lines, Transform to Uppercase, Transform
+  to Lowercase. Operates on the whole buffer for now (per-selection in
+  a future version).
+
 ## v0.3.0 — 2026-05-11
 
 - **Markdown preview (⌥⌘M).** When the active tab is a `.md` / `.markdown` /

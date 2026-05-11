@@ -12,6 +12,7 @@ mod persistence;
 mod project_search;
 mod recent;
 mod recovery;
+mod transforms;
 mod ui;
 mod workspace;
 

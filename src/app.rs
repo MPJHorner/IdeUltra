@@ -66,6 +66,9 @@ pub struct IdeUltraApp {
     /// Active diff modal: (tab index, summary, file name shown in title).
     diff_modal: Option<(usize, DiffSummary, String)>,
     recent_files: RecentFiles,
+    autosave_on_focus_loss: bool,
+    /// Last-known viewport focus state. Auto-save fires on true → false.
+    was_focused: bool,
 }
 
 impl IdeUltraApp {
@@ -102,6 +105,8 @@ impl IdeUltraApp {
             markdown_preview: loaded.settings.markdown_preview,
             diff_modal: None,
             recent_files: loaded.session.recent_files.clone(),
+            autosave_on_focus_loss: loaded.settings.autosave_on_focus_loss,
+            was_focused: true,
         };
 
         // Surface anything left over from a previous crash / force-quit.
@@ -145,6 +150,59 @@ impl IdeUltraApp {
             sidebar_width: self.sidebar_width,
             sidebar_visible: self.sidebar_visible,
             markdown_preview: self.markdown_preview,
+            autosave_on_focus_loss: self.autosave_on_focus_loss,
+        }
+    }
+
+    fn handle_focus_autosave(&mut self, ctx: &Context) {
+        let now_focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
+        if self.was_focused && !now_focused && self.autosave_on_focus_loss {
+            self.autosave_all_dirty();
+        }
+        self.was_focused = now_focused;
+    }
+
+    fn autosave_all_dirty(&mut self) {
+        let mut saved = 0usize;
+        let mut errors = 0usize;
+        for tab in self.tabs.iter_mut() {
+            if !tab.is_dirty() {
+                continue;
+            }
+            match tab.save() {
+                Ok(_) => {
+                    saved += 1;
+                    if let Some(store) = &self.recovery_store {
+                        let _ = store.clear(&tab.path);
+                    }
+                    tab.last_recovered_hash = None;
+                }
+                Err(err) => {
+                    errors += 1;
+                    tracing::warn!(
+                        error = %err,
+                        file = %tab.path.display(),
+                        "autosave failed",
+                    );
+                }
+            }
+        }
+        if saved > 0 || errors > 0 {
+            tracing::info!(saved, errors, "focus-loss autosave");
+            self.flash(format!(
+                "Auto-saved {saved} buffer(s){}",
+                if errors > 0 {
+                    format!(" ({errors} failed)")
+                } else {
+                    String::new()
+                }
+            ));
+        }
+    }
+
+    fn transform_active_text<F: FnOnce(&str) -> String>(&mut self, f: F) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.buffer.text = f(&tab.buffer.text);
         }
     }
 
@@ -672,6 +730,30 @@ impl IdeUltraApp {
                 self.markdown_preview = !self.markdown_preview;
                 self.saver.mark_dirty();
             }
+            CommandId::SortLines => {
+                self.transform_active_text(crate::transforms::sort_lines);
+            }
+            CommandId::SortLinesReverse => {
+                self.transform_active_text(crate::transforms::sort_lines_reverse);
+            }
+            CommandId::UniqueLines => {
+                self.transform_active_text(crate::transforms::unique_lines);
+            }
+            CommandId::UpperCase => {
+                self.transform_active_text(crate::transforms::to_upper);
+            }
+            CommandId::LowerCase => {
+                self.transform_active_text(crate::transforms::to_lower);
+            }
+            CommandId::ToggleAutosaveOnFocusLoss => {
+                self.autosave_on_focus_loss = !self.autosave_on_focus_loss;
+                self.saver.mark_dirty();
+                self.flash(if self.autosave_on_focus_loss {
+                    "Auto-save on focus loss: on"
+                } else {
+                    "Auto-save on focus loss: off"
+                });
+            }
         }
     }
 
@@ -851,6 +933,7 @@ impl eframe::App for IdeUltraApp {
         self.handle_shortcuts(ctx);
         self.apply_theme(ctx);
         self.read_window_state(ctx);
+        self.handle_focus_autosave(ctx);
         self.drain_watcher();
         self.write_recoveries();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.window_title()));

@@ -26,6 +26,12 @@ pub enum CommandId {
     ThemeDark,
     ThemeLight,
     ToggleMarkdownPreview,
+    SortLines,
+    SortLinesReverse,
+    UniqueLines,
+    UpperCase,
+    LowerCase,
+    ToggleAutosaveOnFocusLoss,
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +129,36 @@ pub fn all_commands() -> &'static [CommandEntry] {
             id: CommandId::ToggleMarkdownPreview,
             label: "View: Toggle Markdown Preview",
             keys: "⌥⌘M",
+        },
+        CommandEntry {
+            id: CommandId::SortLines,
+            label: "Edit: Sort Lines",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::SortLinesReverse,
+            label: "Edit: Sort Lines (Reverse)",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::UniqueLines,
+            label: "Edit: Unique Lines",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::UpperCase,
+            label: "Edit: Transform to Uppercase",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::LowerCase,
+            label: "Edit: Transform to Lowercase",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::ToggleAutosaveOnFocusLoss,
+            label: "Settings: Toggle Auto-save on Focus Loss",
+            keys: "",
         },
     ]
 }
