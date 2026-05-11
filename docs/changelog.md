@@ -10,6 +10,10 @@ permalink: /changelog.html
   Supports headings, paragraphs, bold, italic, inline code, fenced code blocks,
   bullet and numbered lists, blockquotes, links (click to open), and horizontal
   rules. Preview-visibility is persisted in `settings.json`.
+- **Diff view for external changes.** The amber "this file changed on disk"
+  banner now has a **View diff** button. It opens a unified line diff with
+  red removals and green additions, showing both the old and new line numbers.
+  Reload or Keep mine are available directly from the modal.
 
 ## v0.2.0 — 2026-05-11
 

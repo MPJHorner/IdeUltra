@@ -2,6 +2,7 @@
 
 mod app;
 mod command_palette;
+mod diff;
 mod editor;
 mod find;
 mod finder;

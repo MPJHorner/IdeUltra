@@ -13,7 +13,9 @@ use crate::persistence::{Loaded, Saver, SessionState, Settings, WindowState};
 use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::command_palette::CommandId;
+use crate::diff::{line_diff, DiffSummary};
 use crate::recovery::{Recovery, RecoveryStore, RECOVERY_DEBOUNCE_MS};
+use crate::ui::diff_modal::{self, DiffModalAction};
 use crate::ui::command_palette_modal::{
     self, CommandPaletteAction, CommandPaletteState,
 };
@@ -60,6 +62,8 @@ pub struct IdeUltraApp {
     /// Per-tab cooldown timestamps so we don't fsync on every keystroke.
     last_recovery_write: std::collections::HashMap<PathBuf, std::time::Instant>,
     markdown_preview: bool,
+    /// Active diff modal: (tab index, summary, file name shown in title).
+    diff_modal: Option<(usize, DiffSummary, String)>,
 }
 
 impl IdeUltraApp {
@@ -94,6 +98,7 @@ impl IdeUltraApp {
             pending_recoveries: Vec::new(),
             last_recovery_write: Default::default(),
             markdown_preview: loaded.settings.markdown_preview,
+            diff_modal: None,
         };
 
         // Surface anything left over from a previous crash / force-quit.
@@ -348,6 +353,21 @@ impl IdeUltraApp {
                 }
             }
         }
+    }
+
+    fn open_diff_for_active_tab(&mut self) {
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            return;
+        };
+        let on_disk = match std::fs::read_to_string(&tab.path) {
+            Ok(s) => s,
+            Err(err) => {
+                self.flash(format!("Could not read for diff: {err}"));
+                return;
+            }
+        };
+        let summary = line_diff(&on_disk, &tab.buffer.text);
+        self.diff_modal = Some((self.active_tab, summary, tab.display_name.clone()));
     }
 
     fn apply_recovery_action(&mut self, action: RecoveryAction) {
@@ -1074,6 +1094,7 @@ impl eframe::App for IdeUltraApp {
             // External-change banner (only for the active tab)
             let mut banner_reload = false;
             let mut banner_dismiss = false;
+            let mut banner_view_diff = false;
             if let Some(tab) = self.tabs.get(self.active_tab) {
                 if tab.external_change {
                     egui::Frame::group(ui.style())
@@ -1087,6 +1108,9 @@ impl eframe::App for IdeUltraApp {
                                     )
                                     .color(egui::Color32::BLACK),
                                 );
+                                if ui.button("View diff").clicked() {
+                                    banner_view_diff = true;
+                                }
                                 if ui.button("Reload from disk").clicked() {
                                     banner_reload = true;
                                 }
@@ -1096,6 +1120,9 @@ impl eframe::App for IdeUltraApp {
                             });
                         });
                 }
+            }
+            if banner_view_diff {
+                self.open_diff_for_active_tab();
             }
             if banner_reload {
                 if let Some(tab) = self.tabs.get_mut(self.active_tab) {
@@ -1168,6 +1195,30 @@ impl eframe::App for IdeUltraApp {
                     .map(|ci| line_col_at_char(&tab.buffer.text, ci));
             }
         });
+
+        // ── diff modal (triggered from external-change banner) ──────────
+        if let Some((tab_idx, summary, file_name)) = self.diff_modal.as_ref() {
+            let tab_idx = *tab_idx;
+            let action = diff_modal::show(ctx, file_name, summary);
+            match action {
+                DiffModalAction::None => {}
+                DiffModalAction::Close => self.diff_modal = None,
+                DiffModalAction::Reload => {
+                    self.diff_modal = None;
+                    if let Some(tab) = self.tabs.get_mut(tab_idx) {
+                        if let Err(err) = tab.reload_from_disk() {
+                            self.flash(format!("Reload failed: {err}"));
+                        }
+                    }
+                }
+                DiffModalAction::KeepMine => {
+                    self.diff_modal = None;
+                    if let Some(tab) = self.tabs.get_mut(tab_idx) {
+                        tab.external_change = false;
+                    }
+                }
+            }
+        }
 
         // ── recovery modal (startup) ────────────────────────────────────
         if !self.pending_recoveries.is_empty() {
