@@ -1,0 +1,6 @@
+/target
+/dist
+*.dmg
+Cargo.lock.bak
+.DS_Store
+*.swp
