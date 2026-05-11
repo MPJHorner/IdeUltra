@@ -28,3 +28,39 @@ fn hash(s: &str) -> u64 {
     s.hash(&mut h);
     h.finish()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_buffer_is_clean() {
+        let b = Buffer::new("hello".to_string());
+        assert!(!b.is_dirty());
+    }
+
+    #[test]
+    fn edits_make_buffer_dirty() {
+        let mut b = Buffer::new("hello".to_string());
+        b.text.push_str(" world");
+        assert!(b.is_dirty());
+    }
+
+    #[test]
+    fn mark_clean_resets_after_edit() {
+        let mut b = Buffer::new("hello".to_string());
+        b.text.push_str(" world");
+        b.mark_clean();
+        assert!(!b.is_dirty());
+    }
+
+    #[test]
+    fn editing_then_undoing_returns_to_clean() {
+        // A user types a character and then deletes it: hash matches saved.
+        let mut b = Buffer::new("abc".to_string());
+        b.text.push('x');
+        assert!(b.is_dirty());
+        b.text.pop();
+        assert!(!b.is_dirty());
+    }
+}

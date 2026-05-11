@@ -157,3 +157,91 @@ fn read_dir_sorted(
 
     entries
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn names(tree: &FileTree) -> Vec<&str> {
+        tree.root
+            .children
+            .as_ref()
+            .map(|cs| cs.iter().map(|c| c.name.as_str()).collect())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn root_loads_one_level_eagerly() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "").unwrap();
+        fs::create_dir(dir.path().join("sub")).unwrap();
+        fs::write(dir.path().join("sub").join("nested.txt"), "").unwrap();
+
+        let tree = FileTree::new(dir.path()).unwrap();
+        assert_eq!(names(&tree), vec!["sub", "a.txt"]);
+        // Sub directory's own children are NOT loaded yet (lazy).
+        let sub = tree.root.children.as_ref().unwrap().iter().find(|c| c.name == "sub").unwrap();
+        assert!(sub.children.is_none(), "subdir children must be lazy");
+    }
+
+    #[test]
+    fn directories_sort_before_files_case_insensitive() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("Zzz.txt"), "").unwrap();
+        fs::write(dir.path().join("aaa.txt"), "").unwrap();
+        fs::create_dir(dir.path().join("Mid")).unwrap();
+        fs::create_dir(dir.path().join("alpha")).unwrap();
+
+        let tree = FileTree::new(dir.path()).unwrap();
+        // Dirs first (alpha < Mid case-insensitively), then files (aaa < Zzz).
+        assert_eq!(names(&tree), vec!["alpha", "Mid", "aaa.txt", "Zzz.txt"]);
+    }
+
+    #[test]
+    fn dotgit_is_always_hidden() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join(".git")).unwrap();
+        fs::write(dir.path().join("README.md"), "").unwrap();
+
+        let tree = FileTree::new(dir.path()).unwrap();
+        assert_eq!(names(&tree), vec!["README.md"]);
+    }
+
+    #[test]
+    fn gitignored_entries_are_filtered() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join(".gitignore"), "target/\n*.log\n").unwrap();
+        fs::create_dir(dir.path().join("target")).unwrap();
+        fs::write(dir.path().join("debug.log"), "").unwrap();
+        fs::write(dir.path().join("src.rs"), "").unwrap();
+
+        let tree = FileTree::new(dir.path()).unwrap();
+        // .gitignore itself isn't ignored — it's still visible.
+        assert_eq!(names(&tree), vec![".gitignore", "src.rs"]);
+    }
+
+    #[test]
+    fn lazy_load_children_is_idempotent() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("sub")).unwrap();
+        fs::write(dir.path().join("sub").join("a.txt"), "").unwrap();
+
+        let mut tree = FileTree::new(dir.path()).unwrap();
+        tree.load_children(&[0]); // sub
+        let len_first = tree.root.children.as_ref().unwrap()[0]
+            .children
+            .as_ref()
+            .unwrap()
+            .len();
+        tree.load_children(&[0]); // again — should not re-walk
+        let len_second = tree.root.children.as_ref().unwrap()[0]
+            .children
+            .as_ref()
+            .unwrap()
+            .len();
+        assert_eq!(len_first, len_second);
+        assert_eq!(len_first, 1);
+    }
+}

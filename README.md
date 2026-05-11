@@ -7,7 +7,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 - Zero telemetry, MIT licensed
 - Built for **speed** — startup under 150ms, keystroke-to-paint under 16ms
 
-> **Status:** usable MVP with syntax highlighting. Open a folder, browse files, edit, save — colours come for free for 100+ languages via `syntect`. Find/replace is next. See [`plan.md`](./plan.md) for the deliverable-ordered roadmap.
+> **Status:** usable MVP with syntax highlighting and find/replace. Open a folder, browse, edit, save, search. See [`plan.md`](./plan.md) for the deliverable-ordered roadmap.
 
 ## Shortcuts
 
@@ -19,6 +19,18 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 | `⌘W` | Close active tab |
 | `⌘[` / `⌘]` | Previous / next tab |
 | `⌘1`…`⌘9` | Jump to tab N |
+| `⌘F` | Find |
+| `⌥⌘F` | Find & Replace |
+| `Enter` / `⇧Enter` | Next / previous match |
+| `Esc` | Close find bar |
+
+## Tests
+
+```bash
+cargo test
+```
+
+25 unit tests covering find/replace logic, buffer dirty tracking, language detection, and file-tree behaviour.
 
 ## Run from source
 
@@ -39,8 +51,8 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | D3  | Editor core (open / edit / save) | shipped |
 | D4  | Tabs | shipped |
 | D5  | Syntax highlighting | shipped |
-| D6  | Find & replace | next |
-| D7  | Status bar & shortcuts | |
+| D6  | Find & replace | shipped |
+| D7  | Status bar & shortcuts | next |
 | D8  | Persistence | |
 | D9  | File watching | |
 | D10 | Packaging + docs site | |

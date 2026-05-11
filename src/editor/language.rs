@@ -59,3 +59,48 @@ pub fn language_label(syntax: &SyntaxReference) -> &str {
         &syntax.name
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn rust_extension_resolves_to_rust_syntax() {
+        let s = syntax_for_path(&PathBuf::from("src/main.rs"));
+        assert_eq!(language_label(s), "Rust");
+    }
+
+    #[test]
+    fn unknown_extension_falls_back_to_plain_text() {
+        let s = syntax_for_path(&PathBuf::from("notes.idontexist"));
+        // syntect calls plain text "Plain Text".
+        assert_eq!(s.name, "Plain Text");
+    }
+
+    #[test]
+    fn no_extension_falls_back_to_plain_text() {
+        let s = syntax_for_path(&PathBuf::from("LICENSE"));
+        // No extension and no token match → plain text.
+        // (syntect doesn't ship a LICENSE syntax.)
+        assert_eq!(s.name, "Plain Text");
+    }
+
+    #[test]
+    fn theme_labels_are_human_readable() {
+        assert_eq!(ColorTheme::Dark.label(), "Dark");
+        assert_eq!(ColorTheme::Light.label(), "Light");
+    }
+
+    #[test]
+    fn theme_set_actually_contains_named_themes() {
+        // If syntect renames or drops these, we want to know at test time
+        // not at first user-visible paint.
+        assert!(THEME_SET
+            .themes
+            .contains_key(ColorTheme::Dark.syntect_name()));
+        assert!(THEME_SET
+            .themes
+            .contains_key(ColorTheme::Light.syntect_name()));
+    }
+}

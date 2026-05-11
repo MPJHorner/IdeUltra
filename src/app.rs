@@ -5,6 +5,8 @@ use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 
 use crate::editor::language::{language_label, ColorTheme};
 use crate::editor::EditorTab;
+use crate::find::replace_all as do_replace_all;
+use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::ui::{
     editor_panel,
     sidebar::{self, SidebarAction},
@@ -21,6 +23,10 @@ pub struct IdeUltraApp {
     sidebar_width: f32,
     status_message: Option<(String, std::time::Instant)>,
     theme: ColorTheme,
+    find: FindState,
+    /// Tracks (active_tab_index, buffer_hash, query, options) so we
+    /// re-run `find_matches` only when something actually changed.
+    last_find_signature: Option<u64>,
 }
 
 impl IdeUltraApp {
@@ -34,6 +40,8 @@ impl IdeUltraApp {
             sidebar_width: 260.0,
             status_message: None,
             theme: ColorTheme::Dark,
+            find: FindState::default(),
+            last_find_signature: None,
         }
     }
 
@@ -66,7 +74,6 @@ impl IdeUltraApp {
     }
 
     fn open_file(&mut self, path: &Path) {
-        // Re-focus if already open.
         if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
             self.active_tab = idx;
             return;
@@ -104,8 +111,6 @@ impl IdeUltraApp {
         if idx >= self.tabs.len() {
             return;
         }
-        // NOTE: D3/D4 close is unconditional. The dirty-discard confirm
-        // dialog is wired in D8 once we have native confirm helpers.
         self.tabs.remove(idx);
         if self.active_tab >= self.tabs.len() && !self.tabs.is_empty() {
             self.active_tab = self.tabs.len() - 1;
@@ -126,11 +131,15 @@ impl IdeUltraApp {
         let mut next_tab = false;
         let mut prev_tab = false;
         let mut go_to: Option<usize> = None;
+        let mut find_open = false;
+        let mut find_replace_open = false;
+        let mut find_close = false;
 
         ctx.input_mut(|i| {
             use egui::{Key, KeyboardShortcut, Modifiers};
             let cmd = Modifiers::COMMAND;
             let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+            let cmd_alt = Modifiers::COMMAND | Modifiers::ALT;
             if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::O)) {
                 open_folder = true;
             } else if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::O)) {
@@ -147,6 +156,14 @@ impl IdeUltraApp {
             }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::OpenBracket)) {
                 prev_tab = true;
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd_alt, Key::F)) {
+                find_replace_open = true;
+            } else if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::F)) {
+                find_open = true;
+            }
+            if self.find.open && i.key_pressed(Key::Escape) {
+                find_close = true;
             }
             for (n, key) in [
                 Key::Num1,
@@ -195,6 +212,76 @@ impl IdeUltraApp {
                 self.active_tab = n;
             }
         }
+        if find_open {
+            self.find.open_find();
+        }
+        if find_replace_open {
+            self.find.open_replace();
+        }
+        if find_close {
+            self.find.close();
+        }
+    }
+
+    fn refresh_find_if_needed(&mut self) {
+        if !self.find.open {
+            return;
+        }
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            self.find.matches.clear();
+            return;
+        };
+        let signature = find_signature(
+            self.active_tab,
+            &tab.buffer.text,
+            &self.find.query,
+            self.find.options,
+        );
+        if self.last_find_signature != Some(signature) {
+            self.find.refresh(&tab.buffer.text);
+            self.last_find_signature = Some(signature);
+        }
+    }
+
+    fn apply_find_action(&mut self, action: FindAction) {
+        match action {
+            FindAction::None => {}
+            FindAction::Next => self.find.next(),
+            FindAction::Prev => self.find.prev(),
+            FindAction::Close => self.find.close(),
+            FindAction::ReplaceCurrent => {
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    if let Some(range) = self.find.matches.get(self.find.current).cloned() {
+                        let (new_text, _) = crate::find::replace_one(
+                            &tab.buffer.text,
+                            range,
+                            &self.find.replacement,
+                        );
+                        tab.buffer.text = new_text;
+                        self.last_find_signature = None;
+                    }
+                }
+            }
+            FindAction::ReplaceAll => {
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    match do_replace_all(
+                        &tab.buffer.text,
+                        &self.find.query,
+                        &self.find.replacement,
+                        self.find.options,
+                    ) {
+                        Ok((new_text, count)) => {
+                            tab.buffer.text = new_text;
+                            self.flash(format!("Replaced {count} occurrence(s)"));
+                            self.last_find_signature = None;
+                        }
+                        Err(err) => {
+                            self.flash(format!("Replace failed: {err:?}"));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn window_title(&self) -> String {
@@ -206,6 +293,24 @@ impl IdeUltraApp {
             None => "IdeUltra".to_string(),
         }
     }
+}
+
+fn find_signature(
+    active_tab: usize,
+    text: &str,
+    query: &str,
+    options: crate::find::FindOptions,
+) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut h = DefaultHasher::new();
+    active_tab.hash(&mut h);
+    text.hash(&mut h);
+    query.hash(&mut h);
+    options.case_sensitive.hash(&mut h);
+    options.whole_word.hash(&mut h);
+    options.regex.hash(&mut h);
+    h.finish()
 }
 
 impl eframe::App for IdeUltraApp {
@@ -246,13 +351,20 @@ impl eframe::App for IdeUltraApp {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
+                ui.menu_button("Edit", |ui| {
+                    if ui.button("Find  ⌘F").clicked() {
+                        ui.close_menu();
+                        self.find.open_find();
+                    }
+                    if ui.button("Find & Replace  ⌥⌘F").clicked() {
+                        ui.close_menu();
+                        self.find.open_replace();
+                    }
+                });
                 ui.menu_button("View", |ui| {
                     ui.label(egui::RichText::new("Theme").small().weak());
                     for opt in [ColorTheme::Dark, ColorTheme::Light] {
-                        if ui
-                            .radio(self.theme == opt, opt.label())
-                            .clicked()
-                        {
+                        if ui.radio(self.theme == opt, opt.label()).clicked() {
                             self.theme = opt;
                             ui.close_menu();
                         }
@@ -306,7 +418,6 @@ impl eframe::App for IdeUltraApp {
             });
         });
 
-        // Expire the status message so the next frame redraws clean.
         if let Some((_, t)) = self.status_message {
             if t.elapsed() >= std::time::Duration::from_secs(3) {
                 self.status_message = None;
@@ -333,7 +444,12 @@ impl eframe::App for IdeUltraApp {
             self.open_file(&path);
         }
 
-        // ── central panel: tabs + editor ─────────────────────────────────
+        // Keep matches fresh before rendering the bar (so the count reflects
+        // the current buffer & query).
+        self.refresh_find_if_needed();
+
+        // ── central panel: tabs + find bar + editor ──────────────────────
+        let theme = self.theme;
         CentralPanel::default().show(ctx, |ui| {
             if self.tabs.is_empty() {
                 ui.vertical_centered(|ui| {
@@ -348,7 +464,7 @@ impl eframe::App for IdeUltraApp {
                         }
                         ui.add_space(4.0);
                         ui.label(
-                            egui::RichText::new("⌘O open file   ·   ⇧⌘O open folder")
+                            egui::RichText::new("⌘O open file  ·  ⇧⌘O open folder  ·  ⌘F find")
                                 .small()
                                 .weak(),
                         );
@@ -363,19 +479,30 @@ impl eframe::App for IdeUltraApp {
                 return;
             }
 
-            // Tab strip
-            let action = tabs::show(ui, &self.tabs, self.active_tab);
+            // Tabs
+            let tab_action = tabs::show(ui, &self.tabs, self.active_tab);
             ui.separator();
-            match action {
+            match tab_action {
                 TabAction::Activate(i) => self.active_tab = i,
                 TabAction::Close(i) => self.close_tab(i),
                 TabAction::None => {}
             }
 
+            // Find bar
+            if self.find.open {
+                let action = find_bar::show(ui, &mut self.find);
+                self.apply_find_action(action);
+            }
+
             // Editor
-            let theme = self.theme;
+            let jump = if self.find.scroll_pending {
+                self.find.scroll_pending = false;
+                self.find.matches.get(self.find.current).cloned()
+            } else {
+                None
+            };
             if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                editor_panel::show(ui, tab, theme);
+                editor_panel::show(ui, tab, theme, jump);
             }
         });
     }

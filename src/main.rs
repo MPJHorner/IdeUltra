@@ -2,6 +2,7 @@
 
 mod app;
 mod editor;
+mod find;
 mod logging;
 mod ui;
 mod workspace;
