@@ -8,6 +8,8 @@ use anyhow::{Context, Result};
 use self::tree::FileTree;
 use self::watcher::WorkspaceWatcher;
 use crate::finder::FileIndex;
+use crate::git::GitStatus;
+use std::collections::HashMap;
 
 pub struct Workspace {
     pub root: PathBuf,
@@ -15,6 +17,9 @@ pub struct Workspace {
     pub watcher: Option<WorkspaceWatcher>,
     /// Lazily populated by the fuzzy finder on first Cmd+P.
     pub file_index: Option<FileIndex>,
+    /// Map of absolute path → git status. None when git is unavailable
+    /// or the workspace isn't a repo.
+    pub git_status: Option<HashMap<PathBuf, GitStatus>>,
 }
 
 impl Workspace {
@@ -35,12 +40,32 @@ impl Workspace {
                 None
             }
         };
-        Ok(Self {
+        let mut ws = Self {
             root,
             tree,
             watcher,
             file_index: None,
-        })
+            git_status: None,
+        };
+        ws.refresh_git_status();
+        Ok(ws)
+    }
+
+    pub fn refresh_git_status(&mut self) {
+        let before = self
+            .git_status
+            .as_ref()
+            .map(|m| m.len())
+            .unwrap_or(0);
+        self.git_status = crate::git::read_status(&self.root);
+        let after = self
+            .git_status
+            .as_ref()
+            .map(|m| m.len())
+            .unwrap_or(0);
+        if before != after {
+            tracing::debug!(entries = after, "git status refreshed");
+        }
     }
 
     /// Build (or rebuild) the fuzzy-find index for this workspace.

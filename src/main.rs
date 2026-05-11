@@ -6,6 +6,7 @@ mod diff;
 mod editor;
 mod find;
 mod finder;
+mod git;
 mod logging;
 mod markdown;
 mod persistence;

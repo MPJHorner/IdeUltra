@@ -14,6 +14,14 @@ permalink: /changelog.html
   Sort Lines (Reverse), Unique Lines, Transform to Uppercase, Transform
   to Lowercase. Operates on the whole buffer for now (per-selection in
   a future version).
+- **Git status decorations.** When the workspace is a git repository,
+  each file in the sidebar gets a coloured one-letter status badge:
+  `M` modified (amber), `A` added (green), `?` untracked (blue),
+  `D` deleted (red), `R` renamed (purple), `U` conflict (red),
+  `!` ignored (grey). Status refreshes on workspace open, on save, and
+  whenever IdeUltra regains focus. When `git` is unavailable or the
+  workspace isn't a repo, the sidebar quietly omits the column — no
+  errors, no nags.
 
 ## v0.3.0 — 2026-05-11
 

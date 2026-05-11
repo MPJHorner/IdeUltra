@@ -37,7 +37,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 cargo test
 ```
 
-112 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour, line/column conversion, line-ending detection, settings/session persistence, fuzzy file finder scoring + indexing, project-wide search, the command palette registry, crash recovery, markdown parsing, line-diff, recent-files MRU, and text transformations (sort ascending/descending, unique, upper/lower with Unicode, trailing-newline preservation).
+122 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour, line/column conversion, line-ending detection, settings/session persistence, fuzzy file finder scoring + indexing, project-wide search, the command palette registry, crash recovery, markdown parsing, line-diff, recent-files MRU, text transformations, and git porcelain parsing (untracked, modified, added, deleted, rename, unmerged conflict, paths-with-spaces, multi-record).
 
 ## State files
 
@@ -104,6 +104,7 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 |-|-|-|
 | 1 | Auto-save on focus loss | shipped on `main` |
 | 2 | Selection transforms (sort / unique / case) | shipped on `main` |
+| 3 | Git status decorations in sidebar | shipped on `main` |
 
 ## License
 

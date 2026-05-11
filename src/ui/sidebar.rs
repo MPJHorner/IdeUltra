@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
-use egui::{CollapsingHeader, Id, ScrollArea, Ui};
+use egui::{CollapsingHeader, Color32, Id, ScrollArea, Ui};
 
+use crate::git::GitStatus;
 use crate::workspace::tree::{FileTree, TreeNode};
 
 /// Action requested by the sidebar during this frame.
@@ -10,7 +12,11 @@ pub enum SidebarAction {
     OpenFile(PathBuf),
 }
 
-pub fn show(ui: &mut Ui, tree: &mut FileTree) -> SidebarAction {
+pub fn show(
+    ui: &mut Ui,
+    tree: &mut FileTree,
+    git_status: Option<&HashMap<PathBuf, GitStatus>>,
+) -> SidebarAction {
     let mut action = SidebarAction::None;
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(&tree.root.name).strong());
@@ -30,6 +36,7 @@ pub fn show(ui: &mut Ui, tree: &mut FileTree) -> SidebarAction {
                 &mut action,
                 &mut to_toggle,
                 &mut to_load,
+                git_status,
             );
             for p in to_load {
                 tree.load_children(&p);
@@ -49,13 +56,14 @@ fn render_children(
     action: &mut SidebarAction,
     to_toggle: &mut Option<Vec<usize>>,
     to_load: &mut Vec<Vec<usize>>,
+    git_status: Option<&HashMap<PathBuf, GitStatus>>,
 ) {
     let Some(children) = node.children.as_ref() else {
         return;
     };
     for (idx, child) in children.iter().enumerate() {
         path.push(idx);
-        render_node(ui, child, path, action, to_toggle, to_load);
+        render_node(ui, child, path, action, to_toggle, to_load, git_status);
         path.pop();
     }
 }
@@ -67,6 +75,7 @@ fn render_node(
     action: &mut SidebarAction,
     to_toggle: &mut Option<Vec<usize>>,
     to_load: &mut Vec<Vec<usize>>,
+    git_status: Option<&HashMap<PathBuf, GitStatus>>,
 ) {
     if node.is_dir {
         let id = Id::new(("dir", node.path.as_path()));
@@ -78,19 +87,49 @@ fn render_node(
             if node.children.is_none() {
                 to_load.push(path.clone());
             } else {
-                render_children(ui, node, path, action, to_toggle, to_load);
+                render_children(ui, node, path, action, to_toggle, to_load, git_status);
             }
         });
-        // Reflect open/close state back into our model so we keep it stable.
         if resp.fully_open() != node.expanded && to_toggle.is_none() {
             *to_toggle = Some(path.clone());
         }
     } else {
-        let label = format!("📄 {}", node.name);
-        let resp = ui.add(egui::SelectableLabel::new(false, label));
-        if resp.clicked() {
-            *action = SidebarAction::OpenFile(node.path.clone());
-        }
+        ui.horizontal(|ui| {
+            let resp = ui.add(egui::SelectableLabel::new(
+                false,
+                format!("📄 {}", node.name),
+            ));
+            if resp.clicked() {
+                *action = SidebarAction::OpenFile(node.path.clone());
+            }
+            if let Some(map) = git_status {
+                if let Some(status) = map.get(&node.path) {
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            ui.label(
+                                egui::RichText::new(status.marker())
+                                    .small()
+                                    .strong()
+                                    .color(status_color(*status)),
+                            );
+                        },
+                    );
+                }
+            }
+        });
+    }
+}
+
+fn status_color(s: GitStatus) -> Color32 {
+    match s {
+        GitStatus::Modified => Color32::from_rgb(220, 170, 60),
+        GitStatus::Added => Color32::from_rgb(120, 200, 120),
+        GitStatus::Untracked => Color32::from_rgb(120, 170, 220),
+        GitStatus::Deleted => Color32::from_rgb(220, 90, 90),
+        GitStatus::Renamed => Color32::from_rgb(180, 130, 220),
+        GitStatus::Conflicted => Color32::from_rgb(255, 100, 100),
+        GitStatus::Ignored => Color32::from_rgb(120, 120, 120),
     }
 }
 

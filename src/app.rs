@@ -159,6 +159,13 @@ impl IdeUltraApp {
         if self.was_focused && !now_focused && self.autosave_on_focus_loss {
             self.autosave_all_dirty();
         }
+        // Coming back to focus is a good cheap moment to refresh git status —
+        // the user may have committed or branched while we were in the background.
+        if !self.was_focused && now_focused {
+            if let Some(ws) = self.workspace.as_mut() {
+                ws.refresh_git_status();
+            }
+        }
         self.was_focused = now_focused;
     }
 
@@ -363,11 +370,15 @@ impl IdeUltraApp {
                 Ok(_) => {
                     let msg = format!("Saved {}", tab.display_name);
                     tracing::info!(file = %tab.path.display(), "saved");
-                    // Drop the recovery snapshot — the buffer is on disk now.
                     if let Some(store) = &self.recovery_store {
                         let _ = store.clear(&tab.path);
                     }
                     tab.last_recovered_hash = None;
+                    // The save likely changed git status — refresh so the
+                    // sidebar marker reflects reality immediately.
+                    if let Some(ws) = self.workspace.as_mut() {
+                        ws.refresh_git_status();
+                    }
                     self.flash(msg);
                 }
                 Err(err) => {
@@ -1143,7 +1154,11 @@ impl eframe::App for IdeUltraApp {
                                 }
                             }
                         } else {
-                            let action = sidebar::show(ui, &mut ws.tree);
+                            let action = sidebar::show(
+                                ui,
+                                &mut ws.tree,
+                                ws.git_status.as_ref(),
+                            );
                             if let SidebarAction::OpenFile(path) = action {
                                 file_to_open = Some(path);
                             }
