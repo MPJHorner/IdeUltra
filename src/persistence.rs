@@ -21,6 +21,13 @@ pub struct Settings {
     pub zoom: f32,
     pub sidebar_width: f32,
     pub sidebar_visible: bool,
+    /// Whether the markdown preview pane is shown next to .md tabs.
+    #[serde(default = "default_markdown_preview")]
+    pub markdown_preview: bool,
+}
+
+fn default_markdown_preview() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -30,6 +37,7 @@ impl Default for Settings {
             zoom: 1.0,
             sidebar_width: 260.0,
             sidebar_visible: true,
+            markdown_preview: true,
         }
     }
 }

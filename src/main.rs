@@ -6,6 +6,7 @@ mod editor;
 mod find;
 mod finder;
 mod logging;
+mod markdown;
 mod persistence;
 mod project_search;
 mod recovery;

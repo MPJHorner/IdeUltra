@@ -25,6 +25,7 @@ pub enum CommandId {
     ZoomReset,
     ThemeDark,
     ThemeLight,
+    ToggleMarkdownPreview,
 }
 
 #[derive(Debug, Clone)]
@@ -117,6 +118,11 @@ pub fn all_commands() -> &'static [CommandEntry] {
             id: CommandId::ThemeLight,
             label: "View: Theme: Light",
             keys: "",
+        },
+        CommandEntry {
+            id: CommandId::ToggleMarkdownPreview,
+            label: "View: Toggle Markdown Preview",
+            keys: "⌥⌘M",
         },
     ]
 }

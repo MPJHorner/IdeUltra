@@ -29,6 +29,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 | `⌘G` | Go to line |
 | `⌘B` | Toggle sidebar |
 | `⌘=` / `⌘-` / `⌘0` | Zoom in / out / reset |
+| `⌥⌘M` | Toggle markdown preview |
 
 ## Tests
 
@@ -36,7 +37,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 cargo test
 ```
 
-79 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour (lazy load, sorting, gitignore, invalidate-on-change), line/column conversion, line-ending detection, settings/session persistence (round-trip, atomic writes, missing-tab cleanup, debounce), fuzzy file finder scoring + indexing, project-wide search (line numbers, binary detection, multi-file aggregation, regex errors), the command palette registry, and crash recovery (round-trip, deterministic hashing, stale-recovery cleanup, orphan-metadata handling, clear-all).
+91 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour (lazy load, sorting, gitignore, invalidate-on-change), line/column conversion, line-ending detection, settings/session persistence, fuzzy file finder scoring + indexing, project-wide search, the command palette registry, crash recovery, and markdown parsing (headings, paragraphs, code blocks, inline code, bold/italic, links, lists, rules, quotes).
 
 ## State files
 
@@ -93,6 +94,7 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | 2 | Project-wide search (⇧⌘F) | shipped on `main` |
 | 3 | Command palette (⇧⌘P) | shipped on `main` |
 | 4 | Crash recovery for dirty buffers | shipped on `main` |
+| 5 | Markdown preview (⌥⌘M) | shipped on `main` |
 
 ## License
 

@@ -59,6 +59,7 @@ pub struct IdeUltraApp {
     pending_recoveries: Vec<Recovery>,
     /// Per-tab cooldown timestamps so we don't fsync on every keystroke.
     last_recovery_write: std::collections::HashMap<PathBuf, std::time::Instant>,
+    markdown_preview: bool,
 }
 
 impl IdeUltraApp {
@@ -92,6 +93,7 @@ impl IdeUltraApp {
             recovery_store: RecoveryStore::from_project_dirs(),
             pending_recoveries: Vec::new(),
             last_recovery_write: Default::default(),
+            markdown_preview: loaded.settings.markdown_preview,
         };
 
         // Surface anything left over from a previous crash / force-quit.
@@ -134,6 +136,7 @@ impl IdeUltraApp {
             zoom: self.zoom,
             sidebar_width: self.sidebar_width,
             sidebar_visible: self.sidebar_visible,
+            markdown_preview: self.markdown_preview,
         }
     }
 
@@ -480,6 +483,10 @@ impl IdeUltraApp {
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::G)) {
                 open_goto = true;
             }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd_alt, Key::M)) {
+                self.markdown_preview = !self.markdown_preview;
+                self.saver.mark_dirty();
+            }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::F)) {
                 open_project_search = true;
             } else if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::P)) {
@@ -635,6 +642,10 @@ impl IdeUltraApp {
                 self.theme = ColorTheme::Light;
                 self.saver.mark_dirty();
             }
+            CommandId::ToggleMarkdownPreview => {
+                self.markdown_preview = !self.markdown_preview;
+                self.saver.mark_dirty();
+            }
         }
     }
 
@@ -768,6 +779,13 @@ impl IdeUltraApp {
     }
 }
 
+fn is_markdown(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("md" | "markdown" | "mdx" | "mkd")
+    )
+}
+
 fn find_signature(
     active_tab: usize,
     text: &str,
@@ -862,6 +880,11 @@ impl eframe::App for IdeUltraApp {
                     if ui.button("Toggle Sidebar  ⌘B").clicked() {
                         ui.close_menu();
                         self.sidebar_visible = !self.sidebar_visible;
+                        self.saver.mark_dirty();
+                    }
+                    if ui.button("Toggle Markdown Preview  ⌥⌘M").clicked() {
+                        ui.close_menu();
+                        self.markdown_preview = !self.markdown_preview;
                         self.saver.mark_dirty();
                     }
                     ui.separator();
@@ -1085,6 +1108,42 @@ impl eframe::App for IdeUltraApp {
                 if let Some(tab) = self.tabs.get_mut(self.active_tab) {
                     tab.external_change = false;
                 }
+            }
+
+            // Markdown preview side-pane (only for .md tabs, only when enabled).
+            let show_preview = self.markdown_preview
+                && self
+                    .tabs
+                    .get(self.active_tab)
+                    .map(|t| is_markdown(&t.path))
+                    .unwrap_or(false);
+            if show_preview {
+                let accent = ui.visuals().hyperlink_color;
+                let source = self
+                    .tabs
+                    .get(self.active_tab)
+                    .map(|t| t.buffer.text.clone())
+                    .unwrap_or_default();
+                egui::SidePanel::right("markdown_preview")
+                    .resizable(true)
+                    .default_width(440.0)
+                    .min_width(260.0)
+                    .show_inside(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Preview").strong());
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.small_button("✕").on_hover_text("Hide preview").clicked() {
+                                        self.markdown_preview = false;
+                                        self.saver.mark_dirty();
+                                    }
+                                },
+                            );
+                        });
+                        ui.separator();
+                        crate::ui::markdown_preview::show(ui, &source, accent);
+                    });
             }
 
             // Editor

@@ -3,6 +3,14 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.3.0 — unreleased (on `main`)
+
+- **Markdown preview (⌥⌘M).** When the active tab is a `.md` / `.markdown` /
+  `.mdx` file, a live-rendered preview appears in a resizable right side-panel.
+  Supports headings, paragraphs, bold, italic, inline code, fenced code blocks,
+  bullet and numbered lists, blockquotes, links (click to open), and horizontal
+  rules. Preview-visibility is persisted in `settings.json`.
+
 ## v0.2.0 — 2026-05-11
 
 - **Fuzzy file finder (⌘P).** Type to filter files across the workspace.
