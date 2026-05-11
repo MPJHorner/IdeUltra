@@ -12,6 +12,10 @@ use crate::find::replace_all as do_replace_all;
 use crate::persistence::{Loaded, Saver, SessionState, Settings, WindowState};
 use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
+use crate::command_palette::CommandId;
+use crate::ui::command_palette_modal::{
+    self, CommandPaletteAction, CommandPaletteState,
+};
 use crate::ui::finder_modal::{self, FinderAction, FinderState};
 use crate::ui::project_search_panel::{
     self, ProjectSearchAction, ProjectSearchState,
@@ -47,6 +51,7 @@ pub struct IdeUltraApp {
     window_state: WindowState,
     finder: FinderState,
     project_search: ProjectSearchState,
+    palette: CommandPaletteState,
 }
 
 impl IdeUltraApp {
@@ -76,6 +81,7 @@ impl IdeUltraApp {
             window_state: loaded.session.window.clone(),
             finder: FinderState::default(),
             project_search: ProjectSearchState::default(),
+            palette: CommandPaletteState::default(),
         };
 
         // Restore the last workspace (if any) and the tabs that were open.
@@ -308,6 +314,7 @@ impl IdeUltraApp {
         let mut open_goto = false;
         let mut open_finder = false;
         let mut open_project_search = false;
+        let mut open_palette = false;
 
         ctx.input_mut(|i| {
             use egui::{Key, KeyboardShortcut, Modifiers};
@@ -357,6 +364,8 @@ impl IdeUltraApp {
             }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::F)) {
                 open_project_search = true;
+            } else if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::P)) {
+                open_palette = true;
             } else if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::P)) {
                 open_finder = true;
             }
@@ -458,6 +467,56 @@ impl IdeUltraApp {
         }
         if open_project_search {
             self.open_project_search();
+        }
+        if open_palette {
+            self.palette.open();
+        }
+    }
+
+    fn dispatch_command(&mut self, ctx: &Context, id: CommandId) {
+        match id {
+            CommandId::OpenFile => self.open_file_dialog(),
+            CommandId::OpenFolder => self.open_folder_dialog(),
+            CommandId::Save => self.save_active(),
+            CommandId::CloseTab => self.close_tab(self.active_tab),
+            CommandId::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            CommandId::Find => self.find.open_find(),
+            CommandId::FindReplace => self.find.open_replace(),
+            CommandId::SearchInProject => self.open_project_search(),
+            CommandId::GoToFile => self.open_finder(),
+            CommandId::GoToLine => {
+                if !self.tabs.is_empty() {
+                    self.goto_open = true;
+                    self.goto_input.clear();
+                }
+            }
+            CommandId::ToggleSidebar => {
+                self.sidebar_visible = !self.sidebar_visible;
+                self.saver.mark_dirty();
+            }
+            CommandId::ZoomIn => {
+                self.zoom = (self.zoom + 0.1).clamp(0.5, 3.0);
+                ctx.set_zoom_factor(self.zoom);
+                self.saver.mark_dirty();
+            }
+            CommandId::ZoomOut => {
+                self.zoom = (self.zoom - 0.1).clamp(0.5, 3.0);
+                ctx.set_zoom_factor(self.zoom);
+                self.saver.mark_dirty();
+            }
+            CommandId::ZoomReset => {
+                self.zoom = 1.0;
+                ctx.set_zoom_factor(self.zoom);
+                self.saver.mark_dirty();
+            }
+            CommandId::ThemeDark => {
+                self.theme = ColorTheme::Dark;
+                self.saver.mark_dirty();
+            }
+            CommandId::ThemeLight => {
+                self.theme = ColorTheme::Light;
+                self.saver.mark_dirty();
+            }
         }
     }
 
@@ -666,6 +725,11 @@ impl eframe::App for IdeUltraApp {
                     if ui.button("Search in Project…  ⇧⌘F").clicked() {
                         ui.close_menu();
                         self.open_project_search();
+                    }
+                    ui.separator();
+                    if ui.button("Command Palette  ⇧⌘P").clicked() {
+                        ui.close_menu();
+                        self.palette.open();
                     }
                     if ui.button("Go to Line…  ⌘G").clicked() {
                         ui.close_menu();
@@ -926,6 +990,19 @@ impl eframe::App for IdeUltraApp {
                     .map(|ci| line_col_at_char(&tab.buffer.text, ci));
             }
         });
+
+        // ── command palette (⇧⌘P) ───────────────────────────────────────
+        if self.palette.open {
+            let action = command_palette_modal::show(ctx, &mut self.palette);
+            match action {
+                CommandPaletteAction::None => {}
+                CommandPaletteAction::Close => self.palette.close(),
+                CommandPaletteAction::Run(id) => {
+                    self.palette.close();
+                    self.dispatch_command(ctx, id);
+                }
+            }
+        }
 
         // ── fuzzy file finder modal (⌘P) ────────────────────────────────
         if self.finder.open {

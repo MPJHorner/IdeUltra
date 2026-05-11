@@ -14,6 +14,10 @@ permalink: /changelog.html
   line number; click a line to open the file and jump to the match. Reuses
   the find bar's case / whole-word / regex toggles. Files larger than 1 MB
   and binary files are skipped. Capped at 500 results to keep the UI snappy.
+- **Command palette (⇧⌘P).** A single fuzzy-searchable list of every menu
+  action — File, Edit, Go, View. Reuses the fuzzy file finder's scorer so
+  partial queries like "theme dark" rank the right command first. Adding a
+  new command is a compile error anywhere that doesn't handle it.
 - Index auto-invalidates when the file watcher sees creates / removes /
   renames, so quickly-cloned repos always see their latest shape.
 

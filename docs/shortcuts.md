@@ -38,6 +38,7 @@ The full keymap for v0.1.0.
 | Shortcut | Action |
 |-|-|
 | <code>⌘P</code> | Go to file (fuzzy finder) |
+| <code>⇧⌘P</code> | Command palette |
 | <code>⌘G</code> | Go to line |
 | <code>⌘B</code> | Toggle sidebar |
 
