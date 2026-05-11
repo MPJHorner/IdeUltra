@@ -17,6 +17,9 @@ pub struct EditorTab {
     pub display_name: String,
     pub syntax_name: String,
     pub highlight: HighlightCache,
+    /// Set when the watcher saw the file change while we had unsaved
+    /// edits, OR when we couldn't reload it automatically.
+    pub external_change: bool,
 }
 
 impl EditorTab {
@@ -36,7 +39,19 @@ impl EditorTab {
             display_name,
             syntax_name: syntax.name.clone(),
             highlight: HighlightCache::default(),
+            external_change: false,
         })
+    }
+
+    /// Re-read the file from disk into the buffer. Clears `external_change`
+    /// and marks the buffer clean. Caller should keep the user's caret
+    /// position if they care; this method does not touch egui state.
+    pub fn reload_from_disk(&mut self) -> Result<()> {
+        let text = std::fs::read_to_string(&self.path)
+            .with_context(|| format!("read {}", self.path.display()))?;
+        self.buffer = Buffer::new(text);
+        self.external_change = false;
+        Ok(())
     }
 
     pub fn save(&mut self) -> Result<()> {

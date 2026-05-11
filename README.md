@@ -7,7 +7,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 - Zero telemetry, MIT licensed
 - Built for **speed** — startup under 150ms, keystroke-to-paint under 16ms
 
-> **Status:** usable MVP with syntax highlighting, find/replace, and persistence. Quit and relaunch — your folder, tabs, active file, theme, zoom and sidebar state come back. See [`plan.md`](./plan.md) for the deliverable-ordered roadmap.
+> **Status:** feature-complete MVP. Open a folder, browse, edit with syntax highlighting, find/replace, go-to-line. Tabs, theme, zoom, window and folder all persist. External file changes propagate live — clean buffers reload silently, dirty buffers show a "Reload / Keep mine" banner. D10 (packaging + docs site) is next. See [`plan.md`](./plan.md).
 
 ## Shortcuts
 
@@ -33,7 +33,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 cargo test
 ```
 
-42 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour, line/column conversion, line-ending detection, and settings/session persistence (round-trip, atomic writes, missing-tab cleanup, debounce).
+43 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour (lazy load, sorting, gitignore, invalidate-on-change), line/column conversion, line-ending detection, and settings/session persistence (round-trip, atomic writes, missing-tab cleanup, debounce).
 
 ## State files
 
@@ -67,8 +67,8 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | D6  | Find & replace | shipped |
 | D7  | Status bar & shortcuts | shipped |
 | D8  | Persistence | shipped |
-| D9  | File watching | next |
-| D10 | Packaging + docs site | |
+| D9  | File watching | shipped |
+| D10 | Packaging + docs site | next |
 
 ## License
 

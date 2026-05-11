@@ -17,6 +17,7 @@ use crate::ui::{
     sidebar::{self, SidebarAction},
     tabs::{self, TabAction},
 };
+use crate::workspace::watcher::{Change, ChangeKind};
 use crate::workspace::Workspace;
 
 const SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
@@ -106,6 +107,66 @@ impl IdeUltraApp {
             last_folder: self.workspace.as_ref().map(|w| w.root.clone()),
             open_tabs: self.tabs.iter().map(|t| t.path.clone()).collect(),
             active_tab: self.active_tab,
+        }
+    }
+
+    fn drain_watcher(&mut self) {
+        let Some(ws) = self.workspace.as_mut() else {
+            return;
+        };
+        let Some(watcher) = ws.watcher.as_ref() else {
+            return;
+        };
+        let events = watcher.drain();
+        if events.is_empty() {
+            return;
+        }
+
+        // Invalidate every affected tree dir once per frame.
+        let mut affected_dirs: std::collections::HashSet<PathBuf> = Default::default();
+        for ev in &events {
+            if let Some(parent) = ev.path.parent() {
+                affected_dirs.insert(parent.to_path_buf());
+            }
+            // Also invalidate the path itself if it's a known directory.
+            affected_dirs.insert(ev.path.clone());
+        }
+        for d in affected_dirs {
+            ws.tree.invalidate_containing(&d);
+        }
+
+        // Apply to any open tab whose path matches an event.
+        for ev in events {
+            self.apply_external_change(ev);
+        }
+    }
+
+    fn apply_external_change(&mut self, ev: Change) {
+        let Some(idx) = self.tabs.iter().position(|t| t.path == ev.path) else {
+            return;
+        };
+        match ev.kind {
+            ChangeKind::Removed => {
+                tracing::info!(file = %ev.path.display(), "external removal — marking tab");
+                if let Some(tab) = self.tabs.get_mut(idx) {
+                    // Don't auto-close: the user might want to recover from buffer.
+                    tab.external_change = true;
+                }
+            }
+            ChangeKind::Modified | ChangeKind::Renamed | ChangeKind::Created => {
+                let dirty = self.tabs[idx].is_dirty();
+                if !dirty {
+                    if let Err(err) = self.tabs[idx].reload_from_disk() {
+                        tracing::warn!(error = %err, "reload_from_disk failed");
+                        self.tabs[idx].external_change = true;
+                    } else {
+                        tracing::info!(file = %ev.path.display(), "reloaded clean tab");
+                    }
+                } else {
+                    self.tabs[idx].external_change = true;
+                }
+            }
+            ChangeKind::Other => {}
         }
     }
 
@@ -471,6 +532,7 @@ impl eframe::App for IdeUltraApp {
         self.handle_shortcuts(ctx);
         self.apply_theme(ctx);
         self.read_window_state(ctx);
+        self.drain_watcher();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.window_title()));
 
         // ── menu bar ─────────────────────────────────────────────────────
@@ -683,6 +745,45 @@ impl eframe::App for IdeUltraApp {
             if self.find.open {
                 let action = find_bar::show(ui, &mut self.find);
                 self.apply_find_action(action);
+            }
+
+            // External-change banner (only for the active tab)
+            let mut banner_reload = false;
+            let mut banner_dismiss = false;
+            if let Some(tab) = self.tabs.get(self.active_tab) {
+                if tab.external_change {
+                    egui::Frame::group(ui.style())
+                        .fill(egui::Color32::from_rgb(255, 220, 120))
+                        .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(
+                                        "This file changed on disk while you had unsaved edits.",
+                                    )
+                                    .color(egui::Color32::BLACK),
+                                );
+                                if ui.button("Reload from disk").clicked() {
+                                    banner_reload = true;
+                                }
+                                if ui.button("Keep mine").clicked() {
+                                    banner_dismiss = true;
+                                }
+                            });
+                        });
+                }
+            }
+            if banner_reload {
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    if let Err(err) = tab.reload_from_disk() {
+                        self.flash(format!("Reload failed: {err}"));
+                    }
+                }
+            }
+            if banner_dismiss {
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    tab.external_change = false;
+                }
             }
 
             // Editor

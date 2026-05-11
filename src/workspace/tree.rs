@@ -95,6 +95,40 @@ impl FileTree {
         }
         Some(node)
     }
+
+    /// Invalidate cached children for every directory that contains, or
+    /// is, `affected_path`. Subsequent expansion will re-read from disk.
+    /// Returns the number of nodes invalidated.
+    pub fn invalidate_containing(&mut self, affected_path: &Path) -> usize {
+        let workspace_root = self.workspace_root.clone();
+        invalidate_recursive(&mut self.root, &workspace_root, affected_path)
+    }
+}
+
+fn invalidate_recursive(node: &mut TreeNode, workspace_root: &Path, affected: &Path) -> usize {
+    let mut n = 0;
+    if !node.is_dir {
+        return 0;
+    }
+    // Only descend if the affected path is under this directory.
+    if !path_is_under(affected, &node.path) && node.path != *affected {
+        return 0;
+    }
+    if node.children.is_some() {
+        // Invalidate children first so the count is meaningful.
+        if let Some(children) = node.children.as_mut() {
+            for child in children.iter_mut() {
+                n += invalidate_recursive(child, workspace_root, affected);
+            }
+        }
+        node.children = None;
+        n += 1;
+    }
+    n
+}
+
+fn path_is_under(path: &Path, root: &Path) -> bool {
+    path.strip_prefix(root).is_ok()
 }
 
 fn root_node_placeholder(node: &mut TreeNode) -> TreeNode {
@@ -220,6 +254,23 @@ mod tests {
         let tree = FileTree::new(dir.path()).unwrap();
         // .gitignore itself isn't ignored — it's still visible.
         assert_eq!(names(&tree), vec![".gitignore", "src.rs"]);
+    }
+
+    #[test]
+    fn invalidate_containing_clears_loaded_children() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("sub")).unwrap();
+        fs::write(dir.path().join("sub").join("a.txt"), "").unwrap();
+
+        let mut tree = FileTree::new(dir.path()).unwrap();
+        tree.load_children(&[0]); // load sub
+        assert!(tree.root.children.as_ref().unwrap()[0].children.is_some());
+
+        let touched = dir.path().join("sub").join("a.txt");
+        let n = tree.invalidate_containing(&touched);
+        assert!(n >= 1, "should invalidate at least the root + sub");
+        // After invalidation, children are reset and will lazy-load on next expand.
+        assert!(tree.root.children.is_none());
     }
 
     #[test]

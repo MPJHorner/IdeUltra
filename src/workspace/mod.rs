@@ -1,14 +1,17 @@
 pub mod tree;
+pub mod watcher;
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
 use self::tree::FileTree;
+use self::watcher::WorkspaceWatcher;
 
 pub struct Workspace {
     pub root: PathBuf,
     pub tree: FileTree,
+    pub watcher: Option<WorkspaceWatcher>,
 }
 
 impl Workspace {
@@ -21,7 +24,19 @@ impl Workspace {
             anyhow::bail!("not a directory: {}", root.display());
         }
         let tree = FileTree::new(&root)?;
-        Ok(Self { root, tree })
+        // Watcher failures shouldn't block opening the workspace — log and move on.
+        let watcher = match WorkspaceWatcher::watch(&root) {
+            Ok(w) => Some(w),
+            Err(err) => {
+                tracing::warn!(error = %err, "could not start file watcher");
+                None
+            }
+        };
+        Ok(Self {
+            root,
+            tree,
+            watcher,
+        })
     }
 
     pub fn display_name(&self) -> String {
