@@ -12,6 +12,7 @@ use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
 use crate::editor::language::ColorTheme;
+use crate::keymap::KeymapPreset;
 use crate::recent::RecentFiles;
 
 /// User-tunable preferences. Survives across sessions; never touched
@@ -28,6 +29,18 @@ pub struct Settings {
     /// Save every dirty buffer when the window loses focus.
     #[serde(default = "default_autosave_on_focus_loss")]
     pub autosave_on_focus_loss: bool,
+    /// Which preset (Default / VS Code / PhpStorm) drives the global
+    /// keyboard shortcuts.
+    #[serde(default = "default_keymap_preset")]
+    pub keymap_preset: KeymapPreset,
+    /// Whether the user has explicitly chosen a preset. False on a fresh
+    /// install — drives the first-run keymap picker modal.
+    #[serde(default)]
+    pub keymap_chosen: bool,
+}
+
+fn default_keymap_preset() -> KeymapPreset {
+    KeymapPreset::Default
 }
 
 fn default_markdown_preview() -> bool {
@@ -47,6 +60,8 @@ impl Default for Settings {
             sidebar_visible: true,
             markdown_preview: true,
             autosave_on_focus_loss: true,
+            keymap_preset: KeymapPreset::Default,
+            keymap_chosen: false,
         }
     }
 }

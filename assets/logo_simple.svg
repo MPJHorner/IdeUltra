@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="IdeUltra logo">
+  <path fill="currentColor" fill-rule="evenodd" d="M413.4 256 178 491.4v41.2L413.4 768l77.2-77.2L311.2 512l179.4-178.8L413.4 256Zm197.2 0-77.2 77.2L712.8 512 533.4 690.8l77.2 77.2L846 532.6v-41.2L610.6 256Z" clip-rule="evenodd"/>
+  <path fill="currentColor" d="M512 706 392 826h172l120-120H512Z"/>
+  <path fill="currentColor" d="M565 198 445 318h118l120-120H565Z"/>
+</svg>

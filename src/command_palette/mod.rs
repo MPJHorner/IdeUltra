@@ -32,6 +32,10 @@ pub enum CommandId {
     UpperCase,
     LowerCase,
     ToggleAutosaveOnFocusLoss,
+    ChooseKeymap,
+    KeymapDefault,
+    KeymapVsCode,
+    KeymapPhpStorm,
 }
 
 #[derive(Debug, Clone)]
@@ -158,6 +162,26 @@ pub fn all_commands() -> &'static [CommandEntry] {
         CommandEntry {
             id: CommandId::ToggleAutosaveOnFocusLoss,
             label: "Settings: Toggle Auto-save on Focus Loss",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::ChooseKeymap,
+            label: "Settings: Choose Keymap…",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::KeymapDefault,
+            label: "Settings: Keymap: IdeUltra Default",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::KeymapVsCode,
+            label: "Settings: Keymap: VS Code",
+            keys: "",
+        },
+        CommandEntry {
+            id: CommandId::KeymapPhpStorm,
+            label: "Settings: Keymap: PhpStorm",
             keys: "",
         },
     ]

@@ -14,6 +14,7 @@ use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::command_palette::CommandId;
 use crate::diff::{line_diff, DiffSummary};
+use crate::keymap::{Keymap, KeymapPreset};
 use crate::recent::RecentFiles;
 use crate::recovery::{Recovery, RecoveryStore, RECOVERY_DEBOUNCE_MS};
 use crate::ui::diff_modal::{self, DiffModalAction};
@@ -24,6 +25,7 @@ use crate::ui::finder_modal::{self, FinderAction, FinderState};
 use crate::ui::project_search_panel::{
     self, ProjectSearchAction, ProjectSearchState,
 };
+use crate::ui::keymap_picker::{self, KeymapPickerAction};
 use crate::ui::recovery_modal::{self, RecoveryAction};
 use crate::ui::{
     editor_panel,
@@ -69,6 +71,12 @@ pub struct IdeUltraApp {
     autosave_on_focus_loss: bool,
     /// Last-known viewport focus state. Auto-save fires on true → false.
     was_focused: bool,
+    keymap: Keymap,
+    keymap_preset: KeymapPreset,
+    /// Whether the user has explicitly chosen a keymap. False on first run.
+    keymap_chosen: bool,
+    /// Show the keymap picker as a modal (first-run or user-requested).
+    keymap_picker_open: bool,
 }
 
 impl IdeUltraApp {
@@ -107,6 +115,10 @@ impl IdeUltraApp {
             recent_files: loaded.session.recent_files.clone(),
             autosave_on_focus_loss: loaded.settings.autosave_on_focus_loss,
             was_focused: true,
+            keymap: Keymap::for_preset(loaded.settings.keymap_preset),
+            keymap_preset: loaded.settings.keymap_preset,
+            keymap_chosen: loaded.settings.keymap_chosen,
+            keymap_picker_open: !loaded.settings.keymap_chosen,
         };
 
         // Surface anything left over from a previous crash / force-quit.
@@ -151,7 +163,17 @@ impl IdeUltraApp {
             sidebar_visible: self.sidebar_visible,
             markdown_preview: self.markdown_preview,
             autosave_on_focus_loss: self.autosave_on_focus_loss,
+            keymap_preset: self.keymap_preset,
+            keymap_chosen: self.keymap_chosen,
         }
+    }
+
+    fn switch_keymap(&mut self, preset: KeymapPreset) {
+        self.keymap_preset = preset;
+        self.keymap = Keymap::for_preset(preset);
+        self.keymap_chosen = true;
+        self.saver.mark_dirty();
+        self.flash(format!("Keymap: {}", preset.label()));
     }
 
     fn handle_focus_autosave(&mut self, ctx: &Context) {
@@ -314,10 +336,7 @@ impl IdeUltraApp {
     }
 
     fn apply_theme(&self, ctx: &Context) {
-        match self.theme {
-            ColorTheme::Dark => ctx.set_visuals(egui::Visuals::dark()),
-            ColorTheme::Light => ctx.set_visuals(egui::Visuals::light()),
-        }
+        crate::style::apply(ctx, self.theme);
     }
 
     fn open_folder_dialog(&mut self) {
@@ -513,54 +532,12 @@ impl IdeUltraApp {
     }
 
     fn handle_shortcuts(&mut self, ctx: &Context) {
-        let mut open_folder = false;
-        let mut open_file = false;
-        let mut save = false;
-        let mut close = false;
-        let mut next_tab = false;
-        let mut prev_tab = false;
-        let mut go_to: Option<usize> = None;
-        let mut find_open = false;
-        let mut find_replace_open = false;
-        let mut find_close = false;
-        let mut toggle_sidebar = false;
-        let mut zoom_in = false;
-        let mut zoom_out = false;
-        let mut zoom_reset = false;
-        let mut open_goto = false;
-        let mut open_finder = false;
-        let mut open_project_search = false;
-        let mut open_palette = false;
-
+        // 1. Modal-context Esc and modal Enter/Arrow keys live here because
+        //    they're context-sensitive (Esc on find bar ≠ Esc anywhere else).
         ctx.input_mut(|i| {
-            use egui::{Key, KeyboardShortcut, Modifiers};
-            let cmd = Modifiers::COMMAND;
-            let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
-            let cmd_alt = Modifiers::COMMAND | Modifiers::ALT;
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::O)) {
-                open_folder = true;
-            } else if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::O)) {
-                open_file = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::S)) {
-                save = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::W)) {
-                close = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::CloseBracket)) {
-                next_tab = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::OpenBracket)) {
-                prev_tab = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd_alt, Key::F)) {
-                find_replace_open = true;
-            } else if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::F)) {
-                find_open = true;
-            }
+            use egui::Key;
             if self.find.open && i.key_pressed(Key::Escape) {
-                find_close = true;
+                self.find.close();
             }
             if self.project_search.open
                 && i.key_pressed(Key::Escape)
@@ -568,128 +545,68 @@ impl IdeUltraApp {
                 && !self.finder.open
                 && !self.goto_open
             {
-                // Esc closes project search only if no higher-priority overlay
-                // is open — those have already consumed Esc above.
                 self.project_search.close();
             }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::B)) {
-                toggle_sidebar = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::G)) {
-                open_goto = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd_alt, Key::M)) {
-                self.markdown_preview = !self.markdown_preview;
+        });
+
+        // 2. Tab navigation (Cmd+[ / Cmd+] / Cmd+1..9) is fixed across
+        //    presets — these are universal Mac conventions.
+        ctx.input_mut(|i| {
+            use egui::{Key, KeyboardShortcut, Modifiers};
+            let cmd = Modifiers::COMMAND;
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::CloseBracket))
+                && !self.tabs.is_empty()
+            {
+                self.active_tab = (self.active_tab + 1) % self.tabs.len();
                 self.saver.mark_dirty();
             }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::F)) {
-                open_project_search = true;
-            } else if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::P)) {
-                open_palette = true;
-            } else if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::P)) {
-                open_finder = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Equals))
-                || i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Plus))
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::OpenBracket))
+                && !self.tabs.is_empty()
             {
-                zoom_in = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Minus)) {
-                zoom_out = true;
-            }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Num0)) {
-                zoom_reset = true;
+                self.active_tab = if self.active_tab == 0 {
+                    self.tabs.len() - 1
+                } else {
+                    self.active_tab - 1
+                };
+                self.saver.mark_dirty();
             }
             for (n, key) in [
-                Key::Num1,
-                Key::Num2,
-                Key::Num3,
-                Key::Num4,
-                Key::Num5,
-                Key::Num6,
-                Key::Num7,
-                Key::Num8,
-                Key::Num9,
+                Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5,
+                Key::Num6, Key::Num7, Key::Num8, Key::Num9,
             ]
             .iter()
             .enumerate()
             {
                 if i.consume_shortcut(&KeyboardShortcut::new(cmd, *key)) {
-                    go_to = Some(n);
+                    if n < self.tabs.len() {
+                        self.active_tab = n;
+                        self.saver.mark_dirty();
+                    }
                 }
+            }
+            // Command palette is preset-independent (always ⇧⌘P).
+            if i.consume_shortcut(&KeyboardShortcut::new(
+                Modifiers::COMMAND | Modifiers::SHIFT,
+                Key::P,
+            )) {
+                self.palette.open();
             }
         });
 
-        if open_folder {
-            self.open_folder_dialog();
-        }
-        if open_file {
-            self.open_file_dialog();
-        }
-        if save {
-            self.save_active();
-        }
-        if close {
-            self.close_tab(self.active_tab);
-        }
-        if next_tab && !self.tabs.is_empty() {
-            self.active_tab = (self.active_tab + 1) % self.tabs.len();
-            self.saver.mark_dirty();
-        }
-        if prev_tab && !self.tabs.is_empty() {
-            self.active_tab = if self.active_tab == 0 {
-                self.tabs.len() - 1
-            } else {
-                self.active_tab - 1
-            };
-            self.saver.mark_dirty();
-        }
-        if let Some(n) = go_to {
-            if n < self.tabs.len() {
-                self.active_tab = n;
-                self.saver.mark_dirty();
+        // 3. Everything else is driven by the active keymap preset. We
+        //    collect the IDs to fire, then dispatch outside the input scope.
+        let bindings: Vec<(CommandId, egui::KeyboardShortcut)> =
+            self.keymap.iter().cloned().collect();
+        let mut to_fire: Vec<CommandId> = Vec::new();
+        ctx.input_mut(|i| {
+            for (id, sc) in &bindings {
+                if i.consume_shortcut(sc) {
+                    to_fire.push(*id);
+                }
             }
-        }
-        if find_open {
-            self.find.open_find();
-        }
-        if find_replace_open {
-            self.find.open_replace();
-        }
-        if find_close {
-            self.find.close();
-        }
-        if toggle_sidebar {
-            self.sidebar_visible = !self.sidebar_visible;
-            self.saver.mark_dirty();
-        }
-        if zoom_in {
-            self.zoom = (self.zoom + 0.1).clamp(0.5, 3.0);
-            ctx.set_zoom_factor(self.zoom);
-            self.saver.mark_dirty();
-        }
-        if zoom_out {
-            self.zoom = (self.zoom - 0.1).clamp(0.5, 3.0);
-            ctx.set_zoom_factor(self.zoom);
-            self.saver.mark_dirty();
-        }
-        if zoom_reset {
-            self.zoom = 1.0;
-            ctx.set_zoom_factor(self.zoom);
-            self.saver.mark_dirty();
-        }
-        if open_goto && !self.tabs.is_empty() {
-            self.goto_open = true;
-            self.goto_input.clear();
-        }
-        if open_finder {
-            self.open_finder();
-        }
-        if open_project_search {
-            self.open_project_search();
-        }
-        if open_palette {
-            self.palette.open();
+        });
+        for id in to_fire {
+            self.dispatch_command(ctx, id);
         }
     }
 
@@ -765,6 +682,12 @@ impl IdeUltraApp {
                     "Auto-save on focus loss: off"
                 });
             }
+            CommandId::ChooseKeymap => {
+                self.keymap_picker_open = true;
+            }
+            CommandId::KeymapDefault => self.switch_keymap(KeymapPreset::Default),
+            CommandId::KeymapVsCode => self.switch_keymap(KeymapPreset::VsCode),
+            CommandId::KeymapPhpStorm => self.switch_keymap(KeymapPreset::PhpStorm),
         }
     }
 
@@ -1031,6 +954,27 @@ impl eframe::App for IdeUltraApp {
                             self.goto_input.clear();
                         }
                     }
+                    ui.separator();
+                    // Keymap submenu — switch the global shortcut set.
+                    let current = self.keymap_preset;
+                    ui.menu_button("Keymap", |ui| {
+                        for preset in KeymapPreset::all() {
+                            let label = format!(
+                                "{} {}",
+                                if *preset == current { "●" } else { " " },
+                                preset.label(),
+                            );
+                            if ui.button(label).clicked() {
+                                ui.close_menu();
+                                self.switch_keymap(*preset);
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Open Keymap Picker…").clicked() {
+                            ui.close_menu();
+                            self.keymap_picker_open = true;
+                        }
+                    });
                 });
                 ui.menu_button("View", |ui| {
                     if ui.button("Toggle Sidebar  ⌘B").clicked() {
@@ -1368,9 +1312,22 @@ impl eframe::App for IdeUltraApp {
             }
         }
 
+        // ── keymap picker (first-run + on-demand) ───────────────────────
+        if self.keymap_picker_open {
+            let action =
+                keymap_picker::show(ctx, self.keymap_preset, !self.keymap_chosen);
+            match action {
+                KeymapPickerAction::None => {}
+                KeymapPickerAction::Choose(preset) => {
+                    self.switch_keymap(preset);
+                    self.keymap_picker_open = false;
+                }
+            }
+        }
+
         // ── command palette (⇧⌘P) ───────────────────────────────────────
         if self.palette.open {
-            let action = command_palette_modal::show(ctx, &mut self.palette);
+            let action = command_palette_modal::show(ctx, &mut self.palette, &self.keymap);
             match action {
                 CommandPaletteAction::None => {}
                 CommandPaletteAction::Close => self.palette.close(),

@@ -17,6 +17,9 @@ pub struct FileIndex {
     /// All files in the workspace as full paths — we can open them without
     /// rejoining against the root.
     pub paths: Vec<PathBuf>,
+    /// Display strings, parallel to `paths`. Original-case workspace-relative
+    /// paths suitable for showing in the UI.
+    pub displays: Vec<String>,
     /// Lowercased display strings, parallel to `paths`. Pre-computed so
     /// match scoring doesn't re-lowercase on every keystroke.
     pub haystacks: Vec<String>,
@@ -27,6 +30,7 @@ pub struct FileIndex {
 impl FileIndex {
     pub fn build(root: &Path) -> Self {
         let mut paths = Vec::new();
+        let mut displays = Vec::new();
         let mut haystacks = Vec::new();
         let mut truncated = false;
 
@@ -47,17 +51,20 @@ impl FileIndex {
                 break;
             }
             let path = entry.into_path();
-            let rel = path
+            let display = path
                 .strip_prefix(root)
                 .unwrap_or(&path)
                 .to_string_lossy()
-                .to_lowercase();
-            haystacks.push(rel);
+                .into_owned();
+            let haystack = display.to_lowercase();
+            displays.push(display);
+            haystacks.push(haystack);
             paths.push(path);
         }
 
         Self {
             paths,
+            displays,
             haystacks,
             truncated,
         }
@@ -148,17 +155,15 @@ fn is_boundary(b: u8) -> bool {
 /// Caller passes `query` as-is; we lowercase once here.
 pub fn search(index: &FileIndex, query: &str, limit: usize) -> Vec<Match> {
     if query.is_empty() {
-        // No query: return the first `limit` entries verbatim so the modal
-        // still has something to render.
         return index
             .paths
             .iter()
-            .zip(index.haystacks.iter())
+            .zip(index.displays.iter())
             .take(limit)
-            .map(|(p, h)| Match {
+            .map(|(p, d)| Match {
                 score: 0,
                 path: p.clone(),
-                display: h.clone(),
+                display: d.clone(),
             })
             .collect();
     }
@@ -166,12 +171,13 @@ pub fn search(index: &FileIndex, query: &str, limit: usize) -> Vec<Match> {
     let mut hits: Vec<Match> = index
         .haystacks
         .iter()
+        .zip(index.displays.iter())
         .zip(index.paths.iter())
-        .filter_map(|(h, p)| score(h, &q).map(|s| (s, h, p)))
-        .map(|(s, h, p)| Match {
+        .filter_map(|((h, d), p)| score(h, &q).map(|s| (s, d, p)))
+        .map(|(s, d, p)| Match {
             score: s,
             path: p.clone(),
-            display: h.clone(),
+            display: d.clone(),
         })
         .collect();
     hits.sort_by(|a, b| b.score.cmp(&a.score));
@@ -183,6 +189,7 @@ pub fn search(index: &FileIndex, query: &str, limit: usize) -> Vec<Match> {
 pub struct Match {
     pub score: i32,
     pub path: PathBuf,
+    /// Original-case workspace-relative path, for display only.
     pub display: String,
 }
 
