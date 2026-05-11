@@ -3,7 +3,7 @@ title: Changelog
 permalink: /changelog.html
 ---
 
-## v0.2.0 — unreleased (on `main`)
+## v0.2.0 — 2026-05-11
 
 - **Fuzzy file finder (⌘P).** Type to filter files across the workspace.
   Arrow keys navigate, Enter opens, Esc closes. Up to 50,000 files indexed
