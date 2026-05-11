@@ -23,6 +23,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 | `⌥⌘F` | Find & Replace |
 | `Enter` / `⇧Enter` | Next / previous match |
 | `Esc` | Close find bar |
+| `⌘P` | Go to file (fuzzy finder) |
 | `⌘G` | Go to line |
 | `⌘B` | Toggle sidebar |
 | `⌘=` / `⌘-` / `⌘0` | Zoom in / out / reset |
@@ -33,7 +34,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 cargo test
 ```
 
-43 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour (lazy load, sorting, gitignore, invalidate-on-change), line/column conversion, line-ending detection, and settings/session persistence (round-trip, atomic writes, missing-tab cleanup, debounce).
+55 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour (lazy load, sorting, gitignore, invalidate-on-change), line/column conversion, line-ending detection, settings/session persistence (round-trip, atomic writes, missing-tab cleanup, debounce), and fuzzy file finder scoring + indexing.
 
 ## State files
 
@@ -81,6 +82,12 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | D10 | Packaging + docs site | shipped |
 
 **MVP complete.** Tagged `v0.1.0`. Docs live at <https://mpjhorner.github.io/IdeUltra/>.
+
+### v0.2 (in progress)
+
+| | Feature | Status |
+|-|-|-|
+| 1 | Fuzzy file finder (⌘P) | shipped on `main` |
 
 ## License
 

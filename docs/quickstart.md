@@ -50,6 +50,9 @@ When regex mode is off, special characters like `.` and `(` are matched literall
 
 ## Navigate
 
+- <code>⌘P</code> — go to file (fuzzy finder). Type characters from the path —
+  consecutive matches and word-boundary matches rank higher.
+  ↑/↓ navigate, Enter opens, Esc closes.
 - <code>⌘G</code> — go to line number
 - <code>⌘B</code> — toggle the sidebar
 - <code>⌘=</code> / <code>⌘-</code> / <code>⌘0</code> — zoom in / out / reset

@@ -7,11 +7,14 @@ use anyhow::{Context, Result};
 
 use self::tree::FileTree;
 use self::watcher::WorkspaceWatcher;
+use crate::finder::FileIndex;
 
 pub struct Workspace {
     pub root: PathBuf,
     pub tree: FileTree,
     pub watcher: Option<WorkspaceWatcher>,
+    /// Lazily populated by the fuzzy finder on first Cmd+P.
+    pub file_index: Option<FileIndex>,
 }
 
 impl Workspace {
@@ -36,7 +39,21 @@ impl Workspace {
             root,
             tree,
             watcher,
+            file_index: None,
         })
+    }
+
+    /// Build (or rebuild) the fuzzy-find index for this workspace.
+    /// Cheap to call again after watcher events — the walk is fast
+    /// and we want the index to stay reasonably fresh.
+    pub fn ensure_index(&mut self) {
+        if self.file_index.is_none() {
+            self.file_index = Some(FileIndex::build(&self.root));
+        }
+    }
+
+    pub fn invalidate_index(&mut self) {
+        self.file_index = None;
     }
 
     pub fn display_name(&self) -> String {

@@ -12,6 +12,7 @@ use crate::find::replace_all as do_replace_all;
 use crate::persistence::{Loaded, Saver, SessionState, Settings, WindowState};
 use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
+use crate::ui::finder_modal::{self, FinderAction, FinderState};
 use crate::ui::{
     editor_panel,
     sidebar::{self, SidebarAction},
@@ -41,6 +42,7 @@ pub struct IdeUltraApp {
     pending_goto_char: Option<usize>,
     saver: Saver,
     window_state: WindowState,
+    finder: FinderState,
 }
 
 impl IdeUltraApp {
@@ -68,6 +70,7 @@ impl IdeUltraApp {
             pending_goto_char: None,
             saver: Saver::new(loaded.paths.clone()),
             window_state: loaded.session.window.clone(),
+            finder: FinderState::default(),
         };
 
         // Restore the last workspace (if any) and the tabs that were open.
@@ -124,15 +127,26 @@ impl IdeUltraApp {
 
         // Invalidate every affected tree dir once per frame.
         let mut affected_dirs: std::collections::HashSet<PathBuf> = Default::default();
+        let mut structural_change = false;
         for ev in &events {
             if let Some(parent) = ev.path.parent() {
                 affected_dirs.insert(parent.to_path_buf());
             }
-            // Also invalidate the path itself if it's a known directory.
             affected_dirs.insert(ev.path.clone());
+            if matches!(
+                ev.kind,
+                ChangeKind::Created | ChangeKind::Removed | ChangeKind::Renamed
+            ) {
+                structural_change = true;
+            }
         }
         for d in affected_dirs {
             ws.tree.invalidate_containing(&d);
+        }
+        // Drop the fuzzy-find index on structural changes so the next ⌘P
+        // sees the current shape of the workspace. The walk is fast.
+        if structural_change {
+            ws.invalidate_index();
         }
 
         // Apply to any open tab whose path matches an event.
@@ -287,6 +301,7 @@ impl IdeUltraApp {
         let mut zoom_out = false;
         let mut zoom_reset = false;
         let mut open_goto = false;
+        let mut open_finder = false;
 
         ctx.input_mut(|i| {
             use egui::{Key, KeyboardShortcut, Modifiers};
@@ -323,6 +338,9 @@ impl IdeUltraApp {
             }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::G)) {
                 open_goto = true;
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::P)) {
+                open_finder = true;
             }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Equals))
                 || i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Plus))
@@ -416,6 +434,21 @@ impl IdeUltraApp {
         if open_goto && !self.tabs.is_empty() {
             self.goto_open = true;
             self.goto_input.clear();
+        }
+        if open_finder {
+            self.open_finder();
+        }
+    }
+
+    fn open_finder(&mut self) {
+        let Some(ws) = self.workspace.as_mut() else {
+            self.flash("Open a folder first (⇧⌘O)");
+            return;
+        };
+        ws.ensure_index();
+        if let Some(index) = ws.file_index.as_ref() {
+            self.finder.open();
+            self.finder.refresh(index);
         }
     }
 
@@ -571,6 +604,10 @@ impl eframe::App for IdeUltraApp {
                         self.find.open_replace();
                     }
                     ui.separator();
+                    if ui.button("Go to File…  ⌘P").clicked() {
+                        ui.close_menu();
+                        self.open_finder();
+                    }
                     if ui.button("Go to Line…  ⌘G").clicked() {
                         ui.close_menu();
                         if !self.tabs.is_empty() {
@@ -806,6 +843,28 @@ impl eframe::App for IdeUltraApp {
                     .map(|ci| line_col_at_char(&tab.buffer.text, ci));
             }
         });
+
+        // ── fuzzy file finder modal (⌘P) ────────────────────────────────
+        if self.finder.open {
+            let action = if let Some(ws) = self.workspace.as_ref() {
+                if let Some(index) = ws.file_index.as_ref() {
+                    self.finder.refresh(index);
+                    finder_modal::show(ctx, &mut self.finder, index)
+                } else {
+                    FinderAction::Close
+                }
+            } else {
+                FinderAction::Close
+            };
+            match action {
+                FinderAction::None => {}
+                FinderAction::Close => self.finder.close(),
+                FinderAction::Open(path) => {
+                    self.finder.close();
+                    self.open_file(&path);
+                }
+            }
+        }
 
         // ── go-to-line modal ─────────────────────────────────────────────
         if self.goto_open {

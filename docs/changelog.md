@@ -3,6 +3,15 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.2.0 — unreleased (on `main`)
+
+- **Fuzzy file finder (⌘P).** Type to filter files across the workspace.
+  Arrow keys navigate, Enter opens, Esc closes. Up to 50,000 files indexed
+  per workspace; results re-rank on every keystroke. Word-boundary and
+  prefix matches outscore arbitrary subsequence matches.
+- Index auto-invalidates when the file watcher sees creates / removes /
+  renames, so quickly-cloned repos always see their latest shape.
+
 ## v0.1.0 — initial MVP
 
 Ten deliverables (D1–D10), all shipped. 43 unit tests, all green.

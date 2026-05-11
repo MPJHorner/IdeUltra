@@ -3,6 +3,7 @@
 mod app;
 mod editor;
 mod find;
+mod finder;
 mod logging;
 mod persistence;
 mod ui;
