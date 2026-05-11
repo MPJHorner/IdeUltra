@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-dmg:
+    name: Build universal macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-cargo-${{ hashFiles('Cargo.lock') }}
+      - name: Build icon (best-effort)
+        run: ./scripts/make-icon.sh || true
+      - name: Package universal .app + .dmg
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: ./scripts/package.sh "${VERSION#v}"
+      - name: Upload DMG to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          gh release upload "$TAG" \
+            "dist/IdeUltra-${VERSION}.dmg" \
+            --clobber
