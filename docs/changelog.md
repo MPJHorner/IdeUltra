@@ -3,6 +3,21 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.5.0 — 2026-05-11
+
+- **Keymap presets.** Pick **IdeUltra Default**, **VS Code**, or
+  **PhpStorm** on first launch (welcome modal) or via `Edit → Keymap`.
+  Replace, Go to File, Go to Line, Open File/Folder, and Toggle Sidebar
+  all rebind to the chosen preset's conventions. The command palette
+  shows the live shortcut for the active preset, not a static label.
+- **Visual overhaul.** New centralised `style::apply` gives dark and
+  light themes calmer chrome, deeper backgrounds, softer corner
+  rounding, real modal shadows.
+- **Logo.** Stylised `< >` glyph in cyan→blue→amber gradient on indigo.
+  Bundled as `IdeUltra.icns` in the `.app`, shown in the Dock.
+- **Fuzzy finder fixes.** Results show original-case filenames (no more
+  `cargo.toml`), file-type icons by extension, redesigned modal frame.
+
 ## v0.4.0 — 2026-05-11
 
 - **Auto-save on focus loss.** When the IdeUltra window loses focus,
