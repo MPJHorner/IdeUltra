@@ -3,7 +3,7 @@ title: Changelog
 permalink: /changelog.html
 ---
 
-## v0.3.0 — unreleased (on `main`)
+## v0.3.0 — 2026-05-11
 
 - **Markdown preview (⌥⌘M).** When the active tab is a `.md` / `.markdown` /
   `.mdx` file, a live-rendered preview appears in a resizable right side-panel.
