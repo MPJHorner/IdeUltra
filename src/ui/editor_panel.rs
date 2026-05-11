@@ -9,15 +9,26 @@ use crate::editor::EditorTab;
 
 const FONT_SIZE: f32 = 13.5;
 
-/// `jump_to`, when `Some`, sets the editor's cursor selection to the byte
-/// range and triggers a scroll-into-view. Used by find/replace to move
-/// to the next match.
+pub enum Jump {
+    /// Byte range — used by find/replace to select the match.
+    ByteRange(Range<usize>),
+    /// Character index — used by go-to-line to put the caret at start of line.
+    CharIndex(usize),
+}
+
+/// Caret position (1-based line, 1-based column). `None` if the editor
+/// has no caret yet (e.g. first frame).
+pub struct ShowResult {
+    pub caret_char_index: Option<usize>,
+}
+
+/// `jump_to`, when `Some`, repositions the cursor and scrolls into view.
 pub fn show(
     ui: &mut Ui,
     tab: &mut EditorTab,
     theme: ColorTheme,
-    jump_to: Option<Range<usize>>,
-) {
+    jump_to: Option<Jump>,
+) -> ShowResult {
     let syntax = tab.syntax();
     let cache = &mut tab.highlight;
     let mut layouter = |ui: &Ui, text: &str, wrap_width: f32| {
@@ -28,7 +39,7 @@ pub fn show(
 
     let editor_id = Id::new(("ide_editor", tab.path.as_path()));
 
-    egui::ScrollArea::both()
+    let caret_char_index = egui::ScrollArea::both()
         .auto_shrink([false, false])
         .id_source(editor_id)
         .show(ui, |ui| {
@@ -44,22 +55,32 @@ pub fn show(
                     .layouter(&mut layouter),
             );
 
-            if let Some(range) = jump_to {
+            if let Some(jump) = jump_to {
                 if let Some(mut state) = TextEditState::load(ui.ctx(), editor_id) {
-                    let start = byte_to_char_index(&tab.buffer.text, range.start);
-                    let end = byte_to_char_index(&tab.buffer.text, range.end);
-                    state
-                        .cursor
-                        .set_char_range(Some(CCursorRange::two(
-                            CCursor::new(start),
-                            CCursor::new(end),
-                        )));
+                    let (start, end) = match jump {
+                        Jump::ByteRange(r) => (
+                            byte_to_char_index(&tab.buffer.text, r.start),
+                            byte_to_char_index(&tab.buffer.text, r.end),
+                        ),
+                        Jump::CharIndex(c) => (c, c),
+                    };
+                    state.cursor.set_char_range(Some(CCursorRange::two(
+                        CCursor::new(start),
+                        CCursor::new(end),
+                    )));
                     state.store(ui.ctx(), editor_id);
                     resp.scroll_to_me(Some(egui::Align::Center));
                     ui.ctx().request_repaint();
                 }
             }
-        });
+
+            // Pull the caret position back out for the status bar.
+            TextEditState::load(ui.ctx(), editor_id)
+                .and_then(|s| s.cursor.char_range().map(|r| r.primary.index))
+        })
+        .inner;
+
+    ShowResult { caret_char_index }
 }
 
 fn byte_to_char_index(text: &str, byte: usize) -> usize {

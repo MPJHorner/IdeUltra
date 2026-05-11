@@ -23,6 +23,9 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 | `⌥⌘F` | Find & Replace |
 | `Enter` / `⇧Enter` | Next / previous match |
 | `Esc` | Close find bar |
+| `⌘G` | Go to line |
+| `⌘B` | Toggle sidebar |
+| `⌘=` / `⌘-` / `⌘0` | Zoom in / out / reset |
 
 ## Tests
 
@@ -30,7 +33,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 cargo test
 ```
 
-25 unit tests covering find/replace logic, buffer dirty tracking, language detection, and file-tree behaviour.
+37 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour, line/column conversion, and line-ending detection.
 
 ## Run from source
 
@@ -52,8 +55,8 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | D4  | Tabs | shipped |
 | D5  | Syntax highlighting | shipped |
 | D6  | Find & replace | shipped |
-| D7  | Status bar & shortcuts | next |
-| D8  | Persistence | |
+| D7  | Status bar & shortcuts | shipped |
+| D8  | Persistence | next |
 | D9  | File watching | |
 | D10 | Packaging + docs site | |
 

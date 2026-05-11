@@ -4,8 +4,10 @@ use eframe::CreationContext;
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 
 use crate::editor::language::{language_label, ColorTheme};
+use crate::editor::position::{char_index_at_line_start, detect_line_ending, line_col_at_char};
 use crate::editor::EditorTab;
 use crate::find::replace_all as do_replace_all;
+use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::ui::{
     editor_panel,
@@ -24,9 +26,16 @@ pub struct IdeUltraApp {
     status_message: Option<(String, std::time::Instant)>,
     theme: ColorTheme,
     find: FindState,
-    /// Tracks (active_tab_index, buffer_hash, query, options) so we
-    /// re-run `find_matches` only when something actually changed.
     last_find_signature: Option<u64>,
+    sidebar_visible: bool,
+    zoom: f32,
+    /// 1-based caret position for the status bar.
+    caret_line_col: Option<(usize, usize)>,
+    /// Go-to-line modal state.
+    goto_open: bool,
+    goto_input: String,
+    /// One-frame jump target requested by go-to-line.
+    pending_goto_char: Option<usize>,
 }
 
 impl IdeUltraApp {
@@ -42,6 +51,12 @@ impl IdeUltraApp {
             theme: ColorTheme::Dark,
             find: FindState::default(),
             last_find_signature: None,
+            sidebar_visible: true,
+            zoom: 1.0,
+            caret_line_col: None,
+            goto_open: false,
+            goto_input: String::new(),
+            pending_goto_char: None,
         }
     }
 
@@ -134,6 +149,11 @@ impl IdeUltraApp {
         let mut find_open = false;
         let mut find_replace_open = false;
         let mut find_close = false;
+        let mut toggle_sidebar = false;
+        let mut zoom_in = false;
+        let mut zoom_out = false;
+        let mut zoom_reset = false;
+        let mut open_goto = false;
 
         ctx.input_mut(|i| {
             use egui::{Key, KeyboardShortcut, Modifiers};
@@ -164,6 +184,23 @@ impl IdeUltraApp {
             }
             if self.find.open && i.key_pressed(Key::Escape) {
                 find_close = true;
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::B)) {
+                toggle_sidebar = true;
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::G)) {
+                open_goto = true;
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Equals))
+                || i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Plus))
+            {
+                zoom_in = true;
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Minus)) {
+                zoom_out = true;
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Num0)) {
+                zoom_reset = true;
             }
             for (n, key) in [
                 Key::Num1,
@@ -220,6 +257,37 @@ impl IdeUltraApp {
         }
         if find_close {
             self.find.close();
+        }
+        if toggle_sidebar {
+            self.sidebar_visible = !self.sidebar_visible;
+        }
+        if zoom_in {
+            self.zoom = (self.zoom + 0.1).clamp(0.5, 3.0);
+            ctx.set_zoom_factor(self.zoom);
+        }
+        if zoom_out {
+            self.zoom = (self.zoom - 0.1).clamp(0.5, 3.0);
+            ctx.set_zoom_factor(self.zoom);
+        }
+        if zoom_reset {
+            self.zoom = 1.0;
+            ctx.set_zoom_factor(self.zoom);
+        }
+        if open_goto && !self.tabs.is_empty() {
+            self.goto_open = true;
+            self.goto_input.clear();
+        }
+    }
+
+    fn apply_goto(&mut self) {
+        if let Some(tab) = self.tabs.get(self.active_tab) {
+            if let Ok(line) = self.goto_input.trim().parse::<usize>() {
+                if line >= 1 {
+                    let char_idx = char_index_at_line_start(&tab.buffer.text, line);
+                    self.pending_goto_char = Some(char_idx);
+                    self.goto_open = false;
+                }
+            }
         }
     }
 
@@ -360,8 +428,34 @@ impl eframe::App for IdeUltraApp {
                         ui.close_menu();
                         self.find.open_replace();
                     }
+                    ui.separator();
+                    if ui.button("Go to Line…  ⌘G").clicked() {
+                        ui.close_menu();
+                        if !self.tabs.is_empty() {
+                            self.goto_open = true;
+                            self.goto_input.clear();
+                        }
+                    }
                 });
                 ui.menu_button("View", |ui| {
+                    if ui.button("Toggle Sidebar  ⌘B").clicked() {
+                        ui.close_menu();
+                        self.sidebar_visible = !self.sidebar_visible;
+                    }
+                    ui.separator();
+                    if ui.button("Zoom In  ⌘=").clicked() {
+                        self.zoom = (self.zoom + 0.1).clamp(0.5, 3.0);
+                        ui.ctx().set_zoom_factor(self.zoom);
+                    }
+                    if ui.button("Zoom Out  ⌘-").clicked() {
+                        self.zoom = (self.zoom - 0.1).clamp(0.5, 3.0);
+                        ui.ctx().set_zoom_factor(self.zoom);
+                    }
+                    if ui.button("Reset Zoom  ⌘0").clicked() {
+                        self.zoom = 1.0;
+                        ui.ctx().set_zoom_factor(self.zoom);
+                    }
+                    ui.separator();
                     ui.label(egui::RichText::new("Theme").small().weak());
                     for opt in [ColorTheme::Dark, ColorTheme::Light] {
                         if ui.radio(self.theme == opt, opt.label()).clicked() {
@@ -387,11 +481,18 @@ impl eframe::App for IdeUltraApp {
                 if let Some(tab) = self.tabs.get(self.active_tab) {
                     let dirty = if tab.is_dirty() { " · modified" } else { "" };
                     let lang = language_label(tab.syntax());
+                    let ending = detect_line_ending(&tab.buffer.text).label();
+                    let pos = self
+                        .caret_line_col
+                        .map(|(l, c)| format!("Ln {l}, Col {c}"))
+                        .unwrap_or_else(|| "—".to_string());
                     ui.label(
                         egui::RichText::new(format!(
-                            "{}{}  ·  {} bytes  ·  {}",
+                            "{}{}  ·  {}  ·  {}  ·  UTF-8  ·  {} bytes  ·  {}",
                             tab.path.display(),
                             dirty,
+                            pos,
+                            ending,
                             tab.buffer.text.len(),
                             lang,
                         ))
@@ -426,19 +527,21 @@ impl eframe::App for IdeUltraApp {
 
         // ── sidebar ──────────────────────────────────────────────────────
         let mut file_to_open: Option<PathBuf> = None;
-        if let Some(ws) = self.workspace.as_mut() {
-            SidePanel::left("sidebar")
-                .resizable(true)
-                .default_width(self.sidebar_width)
-                .min_width(160.0)
-                .max_width(600.0)
-                .show(ctx, |ui| {
-                    self.sidebar_width = ui.available_width();
-                    let action = sidebar::show(ui, &mut ws.tree);
-                    if let SidebarAction::OpenFile(path) = action {
-                        file_to_open = Some(path);
-                    }
-                });
+        if self.sidebar_visible {
+            if let Some(ws) = self.workspace.as_mut() {
+                SidePanel::left("sidebar")
+                    .resizable(true)
+                    .default_width(self.sidebar_width)
+                    .min_width(160.0)
+                    .max_width(600.0)
+                    .show(ctx, |ui| {
+                        self.sidebar_width = ui.available_width();
+                        let action = sidebar::show(ui, &mut ws.tree);
+                        if let SidebarAction::OpenFile(path) = action {
+                            file_to_open = Some(path);
+                        }
+                    });
+            }
         }
         if let Some(path) = file_to_open {
             self.open_file(&path);
@@ -495,15 +598,60 @@ impl eframe::App for IdeUltraApp {
             }
 
             // Editor
-            let jump = if self.find.scroll_pending {
+            let jump: Option<Jump> = if self.find.scroll_pending {
                 self.find.scroll_pending = false;
-                self.find.matches.get(self.find.current).cloned()
+                self.find
+                    .matches
+                    .get(self.find.current)
+                    .cloned()
+                    .map(Jump::ByteRange)
+            } else if let Some(c) = self.pending_goto_char.take() {
+                Some(Jump::CharIndex(c))
             } else {
                 None
             };
             if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                editor_panel::show(ui, tab, theme, jump);
+                let res = editor_panel::show(ui, tab, theme, jump);
+                self.caret_line_col = res
+                    .caret_char_index
+                    .map(|ci| line_col_at_char(&tab.buffer.text, ci));
             }
         });
+
+        // ── go-to-line modal ─────────────────────────────────────────────
+        if self.goto_open {
+            let mut submitted = false;
+            let mut cancelled = false;
+            egui::Window::new("Go to Line")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
+                .show(ctx, |ui| {
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(&mut self.goto_input)
+                            .hint_text("Line number")
+                            .desired_width(160.0),
+                    );
+                    resp.request_focus();
+                    if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        submitted = true;
+                    }
+                    ui.horizontal(|ui| {
+                        if ui.button("Go").clicked() {
+                            submitted = true;
+                        }
+                        if ui.button("Cancel").clicked()
+                            || ui.input(|i| i.key_pressed(egui::Key::Escape))
+                        {
+                            cancelled = true;
+                        }
+                    });
+                });
+            if submitted {
+                self.apply_goto();
+            } else if cancelled {
+                self.goto_open = false;
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 pub mod buffer;
 pub mod language;
+pub mod position;
 
 use std::path::{Path, PathBuf};
 
