@@ -2,6 +2,8 @@
 
 mod app;
 mod logging;
+mod ui;
+mod workspace;
 
 use anyhow::Result;
 use app::IdeUltraApp;
