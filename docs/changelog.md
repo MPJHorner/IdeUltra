@@ -3,6 +3,18 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.8.0 — 2026-05-11
+
+- **Quick switcher (Ctrl+Tab).** Hold `Ctrl`, press `Tab` to cycle
+  through the most-recently-used tabs; release `Ctrl` to switch.
+  `Shift+Ctrl+Tab` cycles backwards. The overlay shows the tab list
+  in MRU order with the selection highlighted. Mirrors VS Code and
+  JetBrains behaviour.
+- **CI on every push.** `.github/workflows/ci.yml` runs the test suite
+  on macOS *and* Ubuntu (verifying the editor builds on Linux for the
+  first time). `release.yml` builds and uploads the universal DMG
+  automatically whenever a `v*` tag is pushed.
+
 ## v0.7.0 — 2026-05-11
 
 - **Universal binary.** The DMG now contains a fat binary for both

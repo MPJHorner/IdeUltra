@@ -13,6 +13,7 @@ mod indent;
 mod keymap;
 mod logging;
 mod markdown;
+mod mru;
 mod persistence;
 mod project_search;
 mod recent;

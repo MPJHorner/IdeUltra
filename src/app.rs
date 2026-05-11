@@ -15,6 +15,7 @@ use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::command_palette::CommandId;
 use crate::diff::{line_diff, DiffSummary};
 use crate::keymap::{Keymap, KeymapPreset};
+use crate::mru::TabMru;
 use crate::recent::RecentFiles;
 use crate::recovery::{Recovery, RecoveryStore, RECOVERY_DEBOUNCE_MS};
 use crate::ui::diff_modal::{self, DiffModalAction};
@@ -27,6 +28,7 @@ use crate::ui::project_search_panel::{
 };
 use crate::ui::close_confirm_modal::{self, CloseConfirmAction};
 use crate::ui::keymap_picker::{self, KeymapPickerAction};
+use crate::ui::quick_switcher::{self, QuickSwitcherState};
 use crate::ui::recovery_modal::{self, RecoveryAction};
 use crate::ui::{
     editor_panel,
@@ -84,6 +86,10 @@ pub struct IdeUltraApp {
     /// After auto-pair inserts a closer, the next frame walks the cursor
     /// back one step so the caret sits between the brackets.
     autopair_backstep_pending: bool,
+    /// Tab most-recently-used order. Driven by every active-tab change
+    /// (typing, click, ⌘1..9, sidebar click) and consumed by Ctrl+Tab.
+    tab_mru: TabMru,
+    quick_switcher: QuickSwitcherState,
 }
 
 impl IdeUltraApp {
@@ -128,7 +134,17 @@ impl IdeUltraApp {
             keymap_picker_open: !loaded.settings.keymap_chosen,
             pending_close: Vec::new(),
             autopair_backstep_pending: false,
+            tab_mru: TabMru::default(),
+            quick_switcher: QuickSwitcherState::default(),
         };
+        // Seed the MRU from the restored tabs so Ctrl+Tab works on first
+        // launch. Order: active tab first, then the others in tab order.
+        for i in 0..app.tabs.len() {
+            app.tab_mru.touch(i);
+        }
+        if app.active_tab < app.tabs.len() {
+            app.tab_mru.touch(app.active_tab);
+        }
 
         // Surface anything left over from a previous crash / force-quit.
         // We don't restore automatically — the user decides.
@@ -373,6 +389,7 @@ impl IdeUltraApp {
     fn open_file(&mut self, path: &Path) {
         if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
             self.active_tab = idx;
+            self.tab_mru.touch(idx);
             self.recent_files.push(path.to_path_buf());
             self.saver.mark_dirty();
             return;
@@ -382,6 +399,7 @@ impl IdeUltraApp {
                 tracing::info!(file = %path.display(), "file opened");
                 self.tabs.push(tab);
                 self.active_tab = self.tabs.len() - 1;
+                self.tab_mru.touch(self.active_tab);
                 self.recent_files.push(path.to_path_buf());
                 self.saver.mark_dirty();
             }
@@ -534,19 +552,20 @@ impl IdeUltraApp {
         if idx >= self.tabs.len() {
             return;
         }
-        // Clean tab: drop the recovery snapshot. Dirty tab being force-closed
-        // (i.e. user chose "Don't Save"): also drop, the user explicitly
-        // discarded.
         if let Some(tab) = self.tabs.get(idx) {
             if let Some(store) = &self.recovery_store {
                 let _ = store.clear(&tab.path);
             }
         }
         self.tabs.remove(idx);
+        self.tab_mru.removed(idx);
         if self.active_tab >= self.tabs.len() && !self.tabs.is_empty() {
             self.active_tab = self.tabs.len() - 1;
         } else if self.tabs.is_empty() {
             self.active_tab = 0;
+        }
+        if !self.tabs.is_empty() {
+            self.tab_mru.touch(self.active_tab);
         }
         self.saver.mark_dirty();
     }
@@ -743,26 +762,23 @@ impl IdeUltraApp {
             }
         }
 
-        // 2. Tab navigation (Cmd+[ / Cmd+] / Cmd+1..9) is fixed across
-        //    presets — these are universal Mac conventions.
+        // 2. Tab navigation (Cmd+[ / Cmd+] / Cmd+1..9 / Ctrl+Tab MRU) is
+        //    fixed across presets — these are universal conventions.
+        let mut activate: Option<usize> = None;
         ctx.input_mut(|i| {
             use egui::{Key, KeyboardShortcut, Modifiers};
             let cmd = Modifiers::COMMAND;
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::CloseBracket))
                 && !self.tabs.is_empty()
             {
-                self.active_tab = (self.active_tab + 1) % self.tabs.len();
-                self.saver.mark_dirty();
+                let n = self.tabs.len();
+                activate = Some((self.active_tab + 1) % n);
             }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::OpenBracket))
                 && !self.tabs.is_empty()
             {
-                self.active_tab = if self.active_tab == 0 {
-                    self.tabs.len() - 1
-                } else {
-                    self.active_tab - 1
-                };
-                self.saver.mark_dirty();
+                let n = self.tabs.len();
+                activate = Some(if self.active_tab == 0 { n - 1 } else { self.active_tab - 1 });
             }
             for (n, key) in [
                 Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5,
@@ -773,19 +789,53 @@ impl IdeUltraApp {
             {
                 if i.consume_shortcut(&KeyboardShortcut::new(cmd, *key)) {
                     if n < self.tabs.len() {
-                        self.active_tab = n;
-                        self.saver.mark_dirty();
+                        activate = Some(n);
                     }
                 }
             }
-            // Command palette is preset-independent (always ⇧⌘P).
             if i.consume_shortcut(&KeyboardShortcut::new(
                 Modifiers::COMMAND | Modifiers::SHIFT,
                 Key::P,
             )) {
                 self.palette.open();
             }
+
+            // Ctrl+Tab — quick-switcher. While Ctrl is held, each Tab press
+            // advances the MRU selection. We open on the first press; on
+            // Ctrl-release we commit and activate the chosen tab.
+            let ctrl = i.modifiers.ctrl;
+            let tab_pressed = i.consume_key(Modifiers::NONE, Key::Tab) && ctrl
+                || i.consume_key(Modifiers::CTRL, Key::Tab);
+            let shift_tab_pressed = i.consume_key(Modifiers::SHIFT, Key::Tab) && ctrl
+                || i.consume_key(Modifiers::CTRL | Modifiers::SHIFT, Key::Tab);
+            if (tab_pressed || shift_tab_pressed) && self.tabs.len() >= 2 {
+                if !self.quick_switcher.open {
+                    self.quick_switcher.open = true;
+                    // Start at MRU position 1 — that's the next-most-recent,
+                    // i.e. the most useful first jump from the current tab.
+                    self.quick_switcher.selected = 1.min(self.tab_mru.len().saturating_sub(1));
+                } else {
+                    let step = if shift_tab_pressed { -1 } else { 1 };
+                    if let Some(next) =
+                        self.tab_mru.cycle(self.quick_switcher.selected, step)
+                    {
+                        self.quick_switcher.selected = next;
+                    }
+                }
+            }
+            // Ctrl released → commit and close.
+            if self.quick_switcher.open && !ctrl {
+                if let Some(idx) = self.tab_mru.tab_at(self.quick_switcher.selected) {
+                    activate = Some(idx);
+                }
+                self.quick_switcher.open = false;
+            }
         });
+        if let Some(idx) = activate {
+            self.active_tab = idx;
+            self.tab_mru.touch(idx);
+            self.saver.mark_dirty();
+        }
 
         // 3. Everything else is driven by the active keymap preset. We
         //    collect the IDs to fire, then dispatch outside the input scope.
@@ -1579,6 +1629,16 @@ impl eframe::App for IdeUltraApp {
         // After the TextEdit has applied the pending `()` insertion,
         // walk the caret back one position so it sits between the pair.
         self.apply_autopair_backstep(ctx);
+
+        // Quick switcher overlay (rendered last so it sits on top).
+        if self.quick_switcher.open {
+            quick_switcher::show(
+                ctx,
+                &self.tabs,
+                &self.tab_mru,
+                self.quick_switcher.selected,
+            );
+        }
 
         // ── diff modal (triggered from external-change banner) ──────────
         if let Some((tab_idx, summary, file_name)) = self.diff_modal.as_ref() {
