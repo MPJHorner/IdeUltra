@@ -81,6 +81,9 @@ pub struct IdeUltraApp {
     /// When set, the close-confirm modal is shown for these tab indices.
     /// Resolves one tab at a time so the user can decide per-buffer.
     pending_close: Vec<usize>,
+    /// After auto-pair inserts a closer, the next frame walks the cursor
+    /// back one step so the caret sits between the brackets.
+    autopair_backstep_pending: bool,
 }
 
 impl IdeUltraApp {
@@ -124,6 +127,7 @@ impl IdeUltraApp {
             keymap_chosen: loaded.settings.keymap_chosen,
             keymap_picker_open: !loaded.settings.keymap_chosen,
             pending_close: Vec::new(),
+            autopair_backstep_pending: false,
         };
 
         // Surface anything left over from a previous crash / force-quit.
@@ -586,6 +590,95 @@ impl IdeUltraApp {
 
     fn flash(&mut self, msg: impl Into<String>) {
         self.status_message = Some((msg.into(), std::time::Instant::now()));
+    }
+
+    fn handle_text_input_autopair(&mut self, ctx: &Context) {
+        // Auto-pair only fires when the user is actively typing into the
+        // editor of an existing tab — not when another widget has focus.
+        let Some(tab_idx) = self.tabs.get(self.active_tab).map(|_| self.active_tab) else {
+            return;
+        };
+        let path = self.tabs[tab_idx].path.clone();
+        let editor_id = egui::Id::new(("ide_editor", path.as_path()));
+        let has_focus = ctx.memory(|m| m.has_focus(editor_id));
+        if !has_focus {
+            return;
+        }
+
+        // Snapshot cursor + text so we can decide based on context.
+        let cursor = egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+            .and_then(|s| s.cursor.char_range())
+            .map(|r| r.primary.index);
+        let Some(cursor_char) = cursor else { return };
+        let text = self.tabs[tab_idx].buffer.text.clone();
+
+        ctx.input_mut(|i| {
+            for ev in i.events.iter_mut() {
+                let egui::Event::Text(s) = ev else { continue };
+                // Only single-character inserts qualify.
+                let Some(first) = s.chars().next() else { continue };
+                if s.chars().count() != 1 {
+                    continue;
+                }
+
+                // Skip-closer: typing `)` right before an existing `)` just
+                // moves the caret past it.
+                if crate::autopair::should_skip_closer(&text, cursor_char, first) {
+                    *s = String::new();
+                    self.autopair_backstep_pending = false;
+                    // We don't actually skip the cursor forward here; the
+                    // user's right-arrow / next-input does that. Emptying
+                    // the text event swallows the duplicate insertion.
+                    continue;
+                }
+
+                // Auto-pair: replace `(` with `()`, etc., and queue a
+                // back-step so the caret sits between them next frame.
+                if let Some((_, closer)) =
+                    crate::autopair::pair_for_opener(first)
+                {
+                    if crate::autopair::should_auto_pair(&text, cursor_char, first)
+                    {
+                        let mut paired = String::with_capacity(2);
+                        paired.push(first);
+                        paired.push(closer);
+                        *s = paired;
+                        self.autopair_backstep_pending = true;
+                    }
+                }
+            }
+        });
+    }
+
+    fn apply_autopair_backstep(&mut self, ctx: &Context) {
+        if !self.autopair_backstep_pending {
+            return;
+        }
+        self.autopair_backstep_pending = false;
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            return;
+        };
+        let editor_id = egui::Id::new(("ide_editor", tab.path.as_path()));
+        let Some(mut state) =
+            egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+        else {
+            return;
+        };
+        let Some(range) = state.cursor.char_range() else {
+            return;
+        };
+        if range.primary.index == 0 {
+            return;
+        }
+        let new_pos = range.primary.index.saturating_sub(1);
+        use egui::text::{CCursor, CCursorRange};
+        state
+            .cursor
+            .set_char_range(Some(CCursorRange::two(
+                CCursor::new(new_pos),
+                CCursor::new(new_pos),
+            )));
+        state.store(ctx, editor_id);
     }
 
     fn handle_shortcuts(&mut self, ctx: &Context) {
@@ -1052,6 +1145,7 @@ impl eframe::App for IdeUltraApp {
             self.first_frame_logged = true;
         }
 
+        self.handle_text_input_autopair(ctx);
         self.handle_shortcuts(ctx);
         self.apply_theme(ctx);
         self.read_window_state(ctx);
@@ -1481,6 +1575,10 @@ impl eframe::App for IdeUltraApp {
                     .map(|ci| line_col_at_char(&tab.buffer.text, ci));
             }
         });
+
+        // After the TextEdit has applied the pending `()` insertion,
+        // walk the caret back one position so it sits between the pair.
+        self.apply_autopair_backstep(ctx);
 
         // ── diff modal (triggered from external-change banner) ──────────
         if let Some((tab_idx, summary, file_name)) = self.diff_modal.as_ref() {

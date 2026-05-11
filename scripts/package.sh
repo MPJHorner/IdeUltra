@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Build a macOS .app bundle and .dmg for IdeUltra. arm64-only for v0.1.0;
-# universal (lipo) is planned for v0.1.1.
+# Build a macOS universal (arm64 + x86_64) .app and .dmg for IdeUltra.
 #
-# Usage: ./scripts/package.sh [VERSION]
-# Example: ./scripts/package.sh 0.1.0
+# Usage:
+#   ./scripts/package.sh                  # uses version from Cargo.toml, universal
+#   ./scripts/package.sh 0.7.0            # explicit version, universal
+#   IDEULTRA_ARCH=arm64 ./scripts/package.sh   # arm64-only (skip x86_64 target)
 #
 # Output:
 #   dist/IdeUltra.app
@@ -12,6 +13,8 @@
 set -euo pipefail
 
 VERSION="${1:-$(grep '^version' Cargo.toml | head -1 | awk -F'"' '{print $2}')}"
+ARCH_MODE="${IDEULTRA_ARCH:-universal}"
+
 DIST="dist"
 APP="$DIST/IdeUltra.app"
 BINARY_NAME="ideultra"
@@ -21,13 +24,32 @@ echo "==> Cleaning $DIST"
 rm -rf "$DIST"
 mkdir -p "$DIST"
 
-echo "==> Building release binary (arm64)"
-cargo build --release
+case "$ARCH_MODE" in
+  universal)
+    echo "==> Building arm64 + x86_64 (universal)"
+    cargo build --release --target aarch64-apple-darwin
+    cargo build --release --target x86_64-apple-darwin
+    echo "==> lipo → universal binary"
+    BIN_PATH="$DIST/$BINARY_NAME"
+    lipo -create -output "$BIN_PATH" \
+      "target/aarch64-apple-darwin/release/$BINARY_NAME" \
+      "target/x86_64-apple-darwin/release/$BINARY_NAME"
+    ;;
+  arm64)
+    echo "==> Building arm64 only"
+    cargo build --release --target aarch64-apple-darwin
+    BIN_PATH="target/aarch64-apple-darwin/release/$BINARY_NAME"
+    ;;
+  *)
+    echo "error: IDEULTRA_ARCH must be 'universal' or 'arm64', got '$ARCH_MODE'" >&2
+    exit 1
+    ;;
+esac
 
 echo "==> Assembling $APP"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
-cp "target/release/$BINARY_NAME" "$APP/Contents/MacOS/$BINARY_NAME"
+cp "$BIN_PATH" "$APP/Contents/MacOS/$BINARY_NAME"
 
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -53,13 +75,20 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
-# Optional icon: drop assets/IdeUltra.icns next to the script and it'll be
-# bundled. Skipped for v0.1.0 — see issue tracker.
 if [ -f "assets/IdeUltra.icns" ]; then
   cp "assets/IdeUltra.icns" "$APP/Contents/Resources/IdeUltra.icns"
   echo "==> Bundled icon"
 else
-  echo "==> No icon at assets/IdeUltra.icns (v0.1.0 ships without one)"
+  echo "==> No icon at assets/IdeUltra.icns (skipped)"
+fi
+
+# Verify the binary is actually universal when we asked for it.
+if [ "$ARCH_MODE" = "universal" ]; then
+  ARCHES=$(lipo -archs "$APP/Contents/MacOS/$BINARY_NAME")
+  if [ "$ARCHES" != "x86_64 arm64" ] && [ "$ARCHES" != "arm64 x86_64" ]; then
+    echo "warning: expected universal binary, lipo reports: $ARCHES"
+  fi
+  echo "    arches: $ARCHES"
 fi
 
 echo "==> Building DMG"

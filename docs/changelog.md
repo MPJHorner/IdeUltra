@@ -3,6 +3,19 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.7.0 — 2026-05-11
+
+- **Universal binary.** The DMG now contains a fat binary for both
+  arm64 (Apple Silicon) and x86_64 (Intel). `scripts/package.sh` builds
+  both targets and `lipo`-combines them. `IDEULTRA_ARCH=arm64` opts back
+  out to a slim arm64-only build for local iteration.
+- **Auto-pair brackets and quotes.** Typing `(`, `[`, `{`, `"`, `'`, or
+  `` ` `` inserts the matching closer and parks the caret between them.
+  Typing the closer when it already follows the caret skips over it
+  instead of duplicating. Suppressed when you're inserting into existing
+  identifier-like text or typing an apostrophe inside a word
+  (`don't` stays unpaired).
+
 ## v0.6.0 — 2026-05-11
 
 - **Indent / dedent on selection (Tab / Shift+Tab).** When the
