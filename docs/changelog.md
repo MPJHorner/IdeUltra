@@ -3,7 +3,7 @@ title: Changelog
 permalink: /changelog.html
 ---
 
-## v0.4.0 — unreleased (on `main`)
+## v0.4.0 — 2026-05-11
 
 - **Auto-save on focus loss.** When the IdeUltra window loses focus,
   every dirty buffer is saved automatically. Toggle from the command
