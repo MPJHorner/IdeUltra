@@ -3,10 +3,13 @@ use std::path::{Path, PathBuf};
 use eframe::CreationContext;
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 
+use std::time::Duration;
+
 use crate::editor::language::{language_label, ColorTheme};
 use crate::editor::position::{char_index_at_line_start, detect_line_ending, line_col_at_char};
 use crate::editor::EditorTab;
 use crate::find::replace_all as do_replace_all;
+use crate::persistence::{Loaded, Saver, SessionState, Settings, WindowState};
 use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::ui::{
@@ -15,6 +18,8 @@ use crate::ui::{
     tabs::{self, TabAction},
 };
 use crate::workspace::Workspace;
+
+const SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 pub struct IdeUltraApp {
     started_at: std::time::Instant,
@@ -29,34 +34,97 @@ pub struct IdeUltraApp {
     last_find_signature: Option<u64>,
     sidebar_visible: bool,
     zoom: f32,
-    /// 1-based caret position for the status bar.
     caret_line_col: Option<(usize, usize)>,
-    /// Go-to-line modal state.
     goto_open: bool,
     goto_input: String,
-    /// One-frame jump target requested by go-to-line.
     pending_goto_char: Option<usize>,
+    saver: Saver,
+    window_state: WindowState,
 }
 
 impl IdeUltraApp {
-    pub fn new(_cc: &CreationContext<'_>) -> Self {
-        Self {
+    pub fn new(cc: &CreationContext<'_>, loaded: Loaded) -> Self {
+        // Apply the persisted zoom to the egui context right away — otherwise
+        // the first frame paints at 1.0 and snaps a frame later.
+        cc.egui_ctx.set_zoom_factor(loaded.settings.zoom);
+
+        let mut app = Self {
             started_at: std::time::Instant::now(),
             first_frame_logged: false,
             workspace: None,
             tabs: Vec::new(),
             active_tab: 0,
-            sidebar_width: 260.0,
+            sidebar_width: loaded.settings.sidebar_width,
             status_message: None,
-            theme: ColorTheme::Dark,
+            theme: loaded.settings.theme,
             find: FindState::default(),
             last_find_signature: None,
-            sidebar_visible: true,
-            zoom: 1.0,
+            sidebar_visible: loaded.settings.sidebar_visible,
+            zoom: loaded.settings.zoom,
             caret_line_col: None,
             goto_open: false,
             goto_input: String::new(),
             pending_goto_char: None,
+            saver: Saver::new(loaded.paths.clone()),
+            window_state: loaded.session.window.clone(),
+        };
+
+        // Restore the last workspace (if any) and the tabs that were open.
+        if let Some(folder) = &loaded.session.last_folder {
+            if folder.is_dir() {
+                if let Ok(ws) = Workspace::open(folder) {
+                    app.workspace = Some(ws);
+                }
+            }
+        }
+        for path in &loaded.session.open_tabs {
+            // open_file mutates app state; we intentionally don't mark dirty
+            // here — restoration shouldn't trigger an immediate save.
+            if let Ok(tab) = EditorTab::open(path) {
+                app.tabs.push(tab);
+            }
+        }
+        if loaded.session.active_tab < app.tabs.len() {
+            app.active_tab = loaded.session.active_tab;
+        }
+
+        app
+    }
+
+    fn current_settings(&self) -> Settings {
+        Settings {
+            theme: self.theme,
+            zoom: self.zoom,
+            sidebar_width: self.sidebar_width,
+            sidebar_visible: self.sidebar_visible,
+        }
+    }
+
+    fn current_session(&self) -> SessionState {
+        SessionState {
+            window: self.window_state.clone(),
+            last_folder: self.workspace.as_ref().map(|w| w.root.clone()),
+            open_tabs: self.tabs.iter().map(|t| t.path.clone()).collect(),
+            active_tab: self.active_tab,
+        }
+    }
+
+    fn read_window_state(&mut self, ctx: &Context) {
+        let new_state = ctx.input(|i| {
+            let vp = i.viewport();
+            let size = vp
+                .inner_rect
+                .map(|r| [r.size().x, r.size().y])
+                .unwrap_or(self.window_state.size);
+            let pos = vp
+                .outer_rect
+                .map(|r| [r.min.x, r.min.y])
+                .or(self.window_state.pos);
+            WindowState { size, pos }
+        });
+        if new_state.size != self.window_state.size || new_state.pos != self.window_state.pos {
+            self.window_state = new_state;
+            self.saver.mark_dirty();
         }
     }
 
@@ -73,6 +141,7 @@ impl IdeUltraApp {
                 Ok(ws) => {
                     tracing::info!(root = %ws.root.display(), "workspace opened");
                     self.workspace = Some(ws);
+                    self.saver.mark_dirty();
                 }
                 Err(err) => {
                     tracing::warn!(error = %err, "failed to open workspace");
@@ -91,6 +160,7 @@ impl IdeUltraApp {
     fn open_file(&mut self, path: &Path) {
         if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
             self.active_tab = idx;
+            self.saver.mark_dirty();
             return;
         }
         match EditorTab::open(path) {
@@ -98,6 +168,7 @@ impl IdeUltraApp {
                 tracing::info!(file = %path.display(), "file opened");
                 self.tabs.push(tab);
                 self.active_tab = self.tabs.len() - 1;
+                self.saver.mark_dirty();
             }
             Err(err) => {
                 tracing::warn!(file = %path.display(), error = %err, "open failed");
@@ -132,6 +203,7 @@ impl IdeUltraApp {
         } else if self.tabs.is_empty() {
             self.active_tab = 0;
         }
+        self.saver.mark_dirty();
     }
 
     fn flash(&mut self, msg: impl Into<String>) {
@@ -236,6 +308,7 @@ impl IdeUltraApp {
         }
         if next_tab && !self.tabs.is_empty() {
             self.active_tab = (self.active_tab + 1) % self.tabs.len();
+            self.saver.mark_dirty();
         }
         if prev_tab && !self.tabs.is_empty() {
             self.active_tab = if self.active_tab == 0 {
@@ -243,10 +316,12 @@ impl IdeUltraApp {
             } else {
                 self.active_tab - 1
             };
+            self.saver.mark_dirty();
         }
         if let Some(n) = go_to {
             if n < self.tabs.len() {
                 self.active_tab = n;
+                self.saver.mark_dirty();
             }
         }
         if find_open {
@@ -260,18 +335,22 @@ impl IdeUltraApp {
         }
         if toggle_sidebar {
             self.sidebar_visible = !self.sidebar_visible;
+            self.saver.mark_dirty();
         }
         if zoom_in {
             self.zoom = (self.zoom + 0.1).clamp(0.5, 3.0);
             ctx.set_zoom_factor(self.zoom);
+            self.saver.mark_dirty();
         }
         if zoom_out {
             self.zoom = (self.zoom - 0.1).clamp(0.5, 3.0);
             ctx.set_zoom_factor(self.zoom);
+            self.saver.mark_dirty();
         }
         if zoom_reset {
             self.zoom = 1.0;
             ctx.set_zoom_factor(self.zoom);
+            self.saver.mark_dirty();
         }
         if open_goto && !self.tabs.is_empty() {
             self.goto_open = true;
@@ -391,6 +470,7 @@ impl eframe::App for IdeUltraApp {
 
         self.handle_shortcuts(ctx);
         self.apply_theme(ctx);
+        self.read_window_state(ctx);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.window_title()));
 
         // ── menu bar ─────────────────────────────────────────────────────
@@ -441,25 +521,30 @@ impl eframe::App for IdeUltraApp {
                     if ui.button("Toggle Sidebar  ⌘B").clicked() {
                         ui.close_menu();
                         self.sidebar_visible = !self.sidebar_visible;
+                        self.saver.mark_dirty();
                     }
                     ui.separator();
                     if ui.button("Zoom In  ⌘=").clicked() {
                         self.zoom = (self.zoom + 0.1).clamp(0.5, 3.0);
                         ui.ctx().set_zoom_factor(self.zoom);
+                        self.saver.mark_dirty();
                     }
                     if ui.button("Zoom Out  ⌘-").clicked() {
                         self.zoom = (self.zoom - 0.1).clamp(0.5, 3.0);
                         ui.ctx().set_zoom_factor(self.zoom);
+                        self.saver.mark_dirty();
                     }
                     if ui.button("Reset Zoom  ⌘0").clicked() {
                         self.zoom = 1.0;
                         ui.ctx().set_zoom_factor(self.zoom);
+                        self.saver.mark_dirty();
                     }
                     ui.separator();
                     ui.label(egui::RichText::new("Theme").small().weak());
                     for opt in [ColorTheme::Dark, ColorTheme::Light] {
                         if ui.radio(self.theme == opt, opt.label()).clicked() {
                             self.theme = opt;
+                            self.saver.mark_dirty();
                             ui.close_menu();
                         }
                     }
@@ -586,7 +671,10 @@ impl eframe::App for IdeUltraApp {
             let tab_action = tabs::show(ui, &self.tabs, self.active_tab);
             ui.separator();
             match tab_action {
-                TabAction::Activate(i) => self.active_tab = i,
+                TabAction::Activate(i) => {
+                    self.active_tab = i;
+                    self.saver.mark_dirty();
+                }
                 TabAction::Close(i) => self.close_tab(i),
                 TabAction::None => {}
             }
@@ -653,5 +741,22 @@ impl eframe::App for IdeUltraApp {
                 self.goto_open = false;
             }
         }
+
+        // ── debounced persistence save ───────────────────────────────────
+        // Cheap when not dirty; one fs write at most every SAVE_DEBOUNCE.
+        let settings = self.current_settings();
+        let session = self.current_session();
+        self.saver.maybe_save(&settings, &session, SAVE_DEBOUNCE);
+    }
+
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        // Called by eframe periodically and on shutdown. Use this as a
+        // belt-and-braces flush so nothing is lost between debounces.
+        let settings = self.current_settings();
+        let session = self.current_session();
+        if let Err(err) = self.saver.save_now(&settings, &session) {
+            tracing::warn!(error = %err, "save_now failed");
+        }
     }
 }
+

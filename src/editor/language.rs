@@ -7,7 +7,7 @@ use syntect::parsing::{SyntaxReference, SyntaxSet};
 pub static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
 pub static THEME_SET: Lazy<ThemeSet> = Lazy::new(ThemeSet::load_defaults);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ColorTheme {
     Dark,
     Light,
