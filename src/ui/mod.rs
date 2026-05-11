@@ -7,6 +7,7 @@ pub mod finder_modal;
 pub mod highlight;
 pub mod keymap_picker;
 pub mod markdown_preview;
+pub mod preferences_window;
 pub mod project_search_panel;
 pub mod quick_switcher;
 pub mod recovery_modal;

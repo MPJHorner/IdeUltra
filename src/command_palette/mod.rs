@@ -37,6 +37,7 @@ pub enum CommandId {
     KeymapVsCode,
     KeymapPhpStorm,
     ToggleLineComment,
+    OpenPreferences,
 }
 
 #[derive(Debug, Clone)]
@@ -189,6 +190,11 @@ pub fn all_commands() -> &'static [CommandEntry] {
             id: CommandId::ToggleLineComment,
             label: "Edit: Toggle Line Comment",
             keys: "⌘/",
+        },
+        CommandEntry {
+            id: CommandId::OpenPreferences,
+            label: "Settings: Open Preferences…",
+            keys: "⌘,",
         },
     ]
 }

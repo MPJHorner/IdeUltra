@@ -45,8 +45,10 @@ The full keymap for v0.1.0.
 |-|-|
 | <code>⌘P</code> | Go to file (fuzzy finder) |
 | <code>⇧⌘P</code> | Command palette |
+| <code>⌃Tab</code> | Quick-switch recent tabs (hold ⌃, release to confirm) |
 | <code>⌘G</code> | Go to line |
 | <code>⌘B</code> | Toggle sidebar |
+| <code>⌘,</code> | Open Preferences |
 
 ## View
 

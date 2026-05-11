@@ -2,6 +2,7 @@
 
 mod app;
 mod autopair;
+mod brackets;
 mod command_palette;
 mod comment;
 mod diff;

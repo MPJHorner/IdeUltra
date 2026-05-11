@@ -22,22 +22,37 @@ pub struct ShowResult {
     pub caret_char_index: Option<usize>,
 }
 
-/// `jump_to`, when `Some`, repositions the cursor and scrolls into view.
 pub fn show(
     ui: &mut Ui,
     tab: &mut EditorTab,
     theme: ColorTheme,
     jump_to: Option<Jump>,
 ) -> ShowResult {
+    let editor_id = Id::new(("ide_editor", tab.path.as_path()));
+
+    // Last frame's caret position drives this frame's bracket-match
+    // highlight. One frame of latency is invisible at 60fps.
+    let prev_caret_char = TextEditState::load(ui.ctx(), editor_id)
+        .and_then(|s| s.cursor.char_range().map(|r| r.primary.index));
+    let bracket_match = prev_caret_char.and_then(|c| {
+        let byte = char_index_to_byte(&tab.buffer.text, c);
+        crate::brackets::find_matching(&tab.buffer.text, byte)
+    });
+
     let syntax = tab.syntax();
     let cache = &mut tab.highlight;
     let mut layouter = |ui: &Ui, text: &str, wrap_width: f32| {
-        let job = cache.layout(text, syntax, theme, wrap_width, FONT_SIZE);
+        let job = cache.layout(
+            text,
+            syntax,
+            theme,
+            wrap_width,
+            FONT_SIZE,
+            bracket_match,
+        );
         let job = (*job).clone();
         ui.fonts(|f| f.layout_job(job))
     };
-
-    let editor_id = Id::new(("ide_editor", tab.path.as_path()));
 
     let caret_char_index = egui::ScrollArea::both()
         .auto_shrink([false, false])
@@ -74,7 +89,6 @@ pub fn show(
                 }
             }
 
-            // Pull the caret position back out for the status bar.
             TextEditState::load(ui.ctx(), editor_id)
                 .and_then(|s| s.cursor.char_range().map(|r| r.primary.index))
         })
@@ -88,4 +102,18 @@ fn byte_to_char_index(text: &str, byte: usize) -> usize {
         return text.chars().count();
     }
     text[..byte].chars().count()
+}
+
+fn char_index_to_byte(text: &str, char_index: usize) -> usize {
+    if char_index == 0 {
+        return 0;
+    }
+    let mut count = 0usize;
+    for (i, _) in text.char_indices() {
+        if count == char_index {
+            return i;
+        }
+        count += 1;
+    }
+    text.len()
 }

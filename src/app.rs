@@ -9,7 +9,7 @@ use crate::editor::language::{language_label, ColorTheme};
 use crate::editor::position::{char_index_at_line_start, detect_line_ending, line_col_at_char};
 use crate::editor::EditorTab;
 use crate::find::replace_all as do_replace_all;
-use crate::persistence::{Loaded, Saver, SessionState, Settings, WindowState};
+use crate::persistence::{self, Loaded, Saver, SessionState, Settings, WindowState};
 use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::command_palette::CommandId;
@@ -28,6 +28,7 @@ use crate::ui::project_search_panel::{
 };
 use crate::ui::close_confirm_modal::{self, CloseConfirmAction};
 use crate::ui::keymap_picker::{self, KeymapPickerAction};
+use crate::ui::preferences_window::{self, PreferencesAction, PreferencesView};
 use crate::ui::quick_switcher::{self, QuickSwitcherState};
 use crate::ui::recovery_modal::{self, RecoveryAction};
 use crate::ui::{
@@ -90,6 +91,7 @@ pub struct IdeUltraApp {
     /// (typing, click, ⌘1..9, sidebar click) and consumed by Ctrl+Tab.
     tab_mru: TabMru,
     quick_switcher: QuickSwitcherState,
+    preferences_open: bool,
 }
 
 impl IdeUltraApp {
@@ -136,6 +138,7 @@ impl IdeUltraApp {
             autopair_backstep_pending: false,
             tab_mru: TabMru::default(),
             quick_switcher: QuickSwitcherState::default(),
+            preferences_open: false,
         };
         // Seed the MRU from the restored tabs so Ctrl+Tab works on first
         // launch. Order: active tab first, then the others in tab order.
@@ -933,6 +936,7 @@ impl IdeUltraApp {
             CommandId::KeymapVsCode => self.switch_keymap(KeymapPreset::VsCode),
             CommandId::KeymapPhpStorm => self.switch_keymap(KeymapPreset::PhpStorm),
             CommandId::ToggleLineComment => self.toggle_line_comment(ctx),
+            CommandId::OpenPreferences => self.preferences_open = !self.preferences_open,
         }
     }
 
@@ -1638,6 +1642,52 @@ impl eframe::App for IdeUltraApp {
                 &self.tab_mru,
                 self.quick_switcher.selected,
             );
+        }
+
+        // Preferences window (⌘,).
+        if self.preferences_open {
+            let state_dir = persistence::PersistencePaths::from_project_dirs()
+                .and_then(|p| p.settings.parent().map(|q| q.to_path_buf()));
+            let view = PreferencesView {
+                theme: self.theme,
+                zoom: self.zoom,
+                autosave: self.autosave_on_focus_loss,
+                markdown_preview: self.markdown_preview,
+                keymap: self.keymap_preset,
+                state_dir: state_dir.as_deref(),
+            };
+            match preferences_window::show(ctx, &view) {
+                PreferencesAction::None => {}
+                PreferencesAction::Close => self.preferences_open = false,
+                PreferencesAction::SetTheme(t) => {
+                    self.theme = t;
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::SetZoom(z) => {
+                    self.zoom = z.clamp(0.5, 3.0);
+                    ctx.set_zoom_factor(self.zoom);
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::ResetZoom => {
+                    self.zoom = 1.0;
+                    ctx.set_zoom_factor(self.zoom);
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::SetAutosaveOnFocusLoss(b) => {
+                    self.autosave_on_focus_loss = b;
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::SetMarkdownPreview(b) => {
+                    self.markdown_preview = b;
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::OpenKeymapPicker => {
+                    self.keymap_picker_open = true;
+                }
+                PreferencesAction::SwitchKeymap(p) => {
+                    self.switch_keymap(p);
+                }
+            }
         }
 
         // ── diff modal (triggered from external-change banner) ──────────

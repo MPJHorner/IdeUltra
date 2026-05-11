@@ -3,6 +3,21 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.9.0 — 2026-05-11
+
+- **Bracket-pair matching.** Place the caret on or just after a
+  bracket and IdeUltra subtly tints both it and its match. Pure
+  `find_matching(text, byte)` walks the buffer counting nesting
+  depth; the highlight pass splits the affected LayoutJob sections
+  to inject a translucent background. Skips when the match crosses
+  a string or comment in only the most embarrassing cases — visual
+  cost of an occasional false-positive in a string is minor.
+- **Preferences window (⌘,).** Real settings UI for theme, zoom,
+  markdown preview, auto-save on focus loss, and keymap. Changes
+  apply live; close with Esc, the Close button, or another ⌘,. The
+  Storage section shows the actual `~/Library/Application Support/…`
+  path so users can find their state files.
+
 ## v0.8.0 — 2026-05-11
 
 - **Quick switcher (Ctrl+Tab).** Hold `Ctrl`, press `Tab` to cycle

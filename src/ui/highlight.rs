@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use egui::text::LayoutJob;
+use egui::text::{LayoutJob, LayoutSection};
 use egui::{Color32, FontFamily, FontId, TextFormat};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{FontStyle, Style};
@@ -10,7 +10,7 @@ use syntect::util::LinesWithEndings;
 use crate::editor::language::{ColorTheme, SYNTAX_SET, THEME_SET};
 
 /// Per-tab highlight cache. We rebuild the LayoutJob only when content,
-/// theme, or wrap width changes — so most frames pay zero highlight cost.
+/// theme, wrap width, or the bracket-match positions change.
 #[derive(Default)]
 pub struct HighlightCache {
     key: Option<CacheKey>,
@@ -24,6 +24,10 @@ struct CacheKey {
     theme: ColorTheme,
     wrap_width_bits: u32,
     font_size_bits: u32,
+    /// `(open, close)` byte positions of a matched bracket pair, or
+    /// `(usize::MAX, usize::MAX)` for "no match". Stored as a sentinel
+    /// rather than Option<...> so the field's Hash/Eq is trivial.
+    bracket_match: (usize, usize),
 }
 
 impl HighlightCache {
@@ -34,6 +38,7 @@ impl HighlightCache {
         theme: ColorTheme,
         wrap_width: f32,
         font_size: f32,
+        bracket_match: Option<(usize, usize)>,
     ) -> Arc<LayoutJob> {
         let content_hash = fast_hash(text);
         let key = CacheKey {
@@ -42,6 +47,7 @@ impl HighlightCache {
             theme,
             wrap_width_bits: wrap_width.to_bits(),
             font_size_bits: font_size.to_bits(),
+            bracket_match: bracket_match.unwrap_or((usize::MAX, usize::MAX)),
         };
         if let Some(existing) = &self.key {
             if existing == &key {
@@ -50,10 +56,23 @@ impl HighlightCache {
                 }
             }
         }
-        let job = Arc::new(build_job(text, syntax, theme, wrap_width, font_size));
+        let mut job = build_job(text, syntax, theme, wrap_width, font_size);
+        if let Some((a, b)) = bracket_match {
+            let bg = bracket_match_bg(theme);
+            inject_background(&mut job, a, bg);
+            inject_background(&mut job, b, bg);
+        }
+        let job = Arc::new(job);
         self.key = Some(key);
         self.job = Some(job.clone());
         job
+    }
+}
+
+fn bracket_match_bg(theme: ColorTheme) -> Color32 {
+    match theme {
+        ColorTheme::Dark => Color32::from_rgba_premultiplied(80, 130, 200, 60),
+        ColorTheme::Light => Color32::from_rgba_premultiplied(180, 210, 255, 200),
     }
 }
 
@@ -67,8 +86,6 @@ fn build_job(
     let theme_obj = THEME_SET
         .themes
         .get(theme.syntect_name())
-        // Fallback to the first theme if the named one is missing — keeps
-        // the editor rendering rather than panicking on a typo.
         .or_else(|| THEME_SET.themes.values().next())
         .expect("at least one theme is always bundled");
 
@@ -99,8 +116,6 @@ fn build_job(
                 }
             }
             Err(_) => {
-                // On a parse error, render the line as plain monospace text
-                // rather than dropping it. Better degradation than a panic.
                 job.append(
                     line,
                     0.0,
@@ -113,6 +128,58 @@ fn build_job(
         }
     }
     job
+}
+
+/// Tint the byte at `byte_pos` with `bg` by splitting the section that
+/// contains it into up to three parts. The bracket character is always
+/// a single ASCII byte, so we tint exactly one byte.
+fn inject_background(job: &mut LayoutJob, byte_pos: usize, bg: Color32) {
+    let idx = match job
+        .sections
+        .iter()
+        .position(|s| s.byte_range.contains(&byte_pos))
+    {
+        Some(i) => i,
+        None => return,
+    };
+    let section = job.sections[idx].clone();
+    let leading = section.leading_space;
+    let base = section.format.clone();
+
+    let mut tinted = base.clone();
+    tinted.background = bg;
+
+    let bracket_end = byte_pos + 1;
+    if bracket_end > section.byte_range.end {
+        return;
+    }
+
+    let before = section.byte_range.start..byte_pos;
+    let bracket = byte_pos..bracket_end;
+    let after = bracket_end..section.byte_range.end;
+
+    let mut replacements: Vec<LayoutSection> = Vec::with_capacity(3);
+    if !before.is_empty() {
+        replacements.push(LayoutSection {
+            leading_space: leading,
+            byte_range: before,
+            format: base.clone(),
+        });
+    }
+    replacements.push(LayoutSection {
+        leading_space: if replacements.is_empty() { leading } else { 0.0 },
+        byte_range: bracket,
+        format: tinted,
+    });
+    if !after.is_empty() {
+        replacements.push(LayoutSection {
+            leading_space: 0.0,
+            byte_range: after,
+            format: base,
+        });
+    }
+
+    job.sections.splice(idx..=idx, replacements);
 }
 
 fn to_color(style: Style) -> Color32 {
