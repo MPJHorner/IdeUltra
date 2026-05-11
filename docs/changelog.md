@@ -5,6 +5,13 @@ permalink: /changelog.html
 
 ## v0.6.0 — unreleased (on `main`)
 
+- **Dirty-close confirm.** Closing a tab with unsaved changes now
+  prompts: **Save**, **Don't Save**, or **Cancel**. Save writes through
+  and closes; Don't Save discards the buffer (and its crash-recovery
+  snapshot); Cancel returns you to the tab. Bulk close (Close Others /
+  Close All) walks each dirty tab one at a time.
+- **Tab right-click menu.** Right-click any tab for **Close**,
+  **Close Others**, **Close All**, **Copy Path**, **Reveal in Finder**.
 - **Toggle line comment (⌘/).** Comments or uncomments the current line
   (or every line in the selection) using the language-appropriate token —
   `//`, `#`, `--`. Indented lines insert the token after the leading

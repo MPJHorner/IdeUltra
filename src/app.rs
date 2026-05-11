@@ -25,6 +25,7 @@ use crate::ui::finder_modal::{self, FinderAction, FinderState};
 use crate::ui::project_search_panel::{
     self, ProjectSearchAction, ProjectSearchState,
 };
+use crate::ui::close_confirm_modal::{self, CloseConfirmAction};
 use crate::ui::keymap_picker::{self, KeymapPickerAction};
 use crate::ui::recovery_modal::{self, RecoveryAction};
 use crate::ui::{
@@ -77,6 +78,9 @@ pub struct IdeUltraApp {
     keymap_chosen: bool,
     /// Show the keymap picker as a modal (first-run or user-requested).
     keymap_picker_open: bool,
+    /// When set, the close-confirm modal is shown for these tab indices.
+    /// Resolves one tab at a time so the user can decide per-buffer.
+    pending_close: Vec<usize>,
 }
 
 impl IdeUltraApp {
@@ -119,6 +123,7 @@ impl IdeUltraApp {
             keymap_preset: loaded.settings.keymap_preset,
             keymap_chosen: loaded.settings.keymap_chosen,
             keymap_picker_open: !loaded.settings.keymap_chosen,
+            pending_close: Vec::new(),
         };
 
         // Surface anything left over from a previous crash / force-quit.
@@ -504,18 +509,33 @@ impl IdeUltraApp {
         }
     }
 
-    fn close_tab(&mut self, idx: usize) {
+    /// Public entry-point for closing a tab. Defers to the dirty-confirm
+    /// modal if the buffer has unsaved changes.
+    fn request_close_tab(&mut self, idx: usize) {
         if idx >= self.tabs.len() {
             return;
         }
-        // If the user closes a dirty tab without saving, *keep* the
-        // recovery snapshot — they may want it back next launch.
-        // If the tab is clean, drop the snapshot.
+        if self.tabs[idx].is_dirty() {
+            // Queue and surface the modal; we'll get the user's answer next
+            // frame. Multiple queued tabs prompt one at a time.
+            if !self.pending_close.contains(&idx) {
+                self.pending_close.push(idx);
+            }
+            return;
+        }
+        self.force_close_tab(idx);
+    }
+
+    fn force_close_tab(&mut self, idx: usize) {
+        if idx >= self.tabs.len() {
+            return;
+        }
+        // Clean tab: drop the recovery snapshot. Dirty tab being force-closed
+        // (i.e. user chose "Don't Save"): also drop, the user explicitly
+        // discarded.
         if let Some(tab) = self.tabs.get(idx) {
-            if !tab.is_dirty() {
-                if let Some(store) = &self.recovery_store {
-                    let _ = store.clear(&tab.path);
-                }
+            if let Some(store) = &self.recovery_store {
+                let _ = store.clear(&tab.path);
             }
         }
         self.tabs.remove(idx);
@@ -525,6 +545,43 @@ impl IdeUltraApp {
             self.active_tab = 0;
         }
         self.saver.mark_dirty();
+    }
+
+    fn close_others(&mut self, keep_idx: usize) {
+        if keep_idx >= self.tabs.len() {
+            return;
+        }
+        // Build list of indices to close in *descending* order so removals
+        // don't shift the others. Skip the kept one.
+        let to_close: Vec<usize> = (0..self.tabs.len())
+            .rev()
+            .filter(|i| *i != keep_idx)
+            .collect();
+        for i in to_close {
+            self.request_close_tab(i);
+        }
+    }
+
+    fn close_all_tabs(&mut self) {
+        let to_close: Vec<usize> = (0..self.tabs.len()).rev().collect();
+        for i in to_close {
+            self.request_close_tab(i);
+        }
+    }
+
+    fn copy_to_clipboard(&mut self, ctx: &Context, text: String) {
+        ctx.copy_text(text.clone());
+        self.flash(format!("Copied: {text}"));
+    }
+
+    fn reveal_in_finder(&mut self, path: &Path) {
+        match std::process::Command::new("open").arg("-R").arg(path).status() {
+            Ok(_) => {}
+            Err(err) => {
+                tracing::warn!(error = %err, "reveal in finder failed");
+                self.flash(format!("Reveal failed: {err}"));
+            }
+        }
     }
 
     fn flash(&mut self, msg: impl Into<String>) {
@@ -615,7 +672,7 @@ impl IdeUltraApp {
             CommandId::OpenFile => self.open_file_dialog(),
             CommandId::OpenFolder => self.open_folder_dialog(),
             CommandId::Save => self.save_active(),
-            CommandId::CloseTab => self.close_tab(self.active_tab),
+            CommandId::CloseTab => self.request_close_tab(self.active_tab),
             CommandId::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             CommandId::Find => self.find.open_find(),
             CommandId::FindReplace => self.find.open_replace(),
@@ -964,7 +1021,7 @@ impl eframe::App for IdeUltraApp {
                     }
                     if ui.button("Close Tab  ⌘W").clicked() {
                         ui.close_menu();
-                        self.close_tab(self.active_tab);
+                        self.request_close_tab(self.active_tab);
                     }
                     ui.separator();
                     if ui.button("Quit").clicked() {
@@ -1219,7 +1276,14 @@ impl eframe::App for IdeUltraApp {
                     self.active_tab = i;
                     self.saver.mark_dirty();
                 }
-                TabAction::Close(i) => self.close_tab(i),
+                TabAction::Close(i) => self.request_close_tab(i),
+                TabAction::CloseOthers(i) => self.close_others(i),
+                TabAction::CloseAll => self.close_all_tabs(),
+                TabAction::CopyPath(p) => {
+                    let s = p.display().to_string();
+                    self.copy_to_clipboard(ctx, s);
+                }
+                TabAction::RevealInFinder(p) => self.reveal_in_finder(&p),
                 TabAction::None => {}
             }
 
@@ -1363,6 +1427,58 @@ impl eframe::App for IdeUltraApp {
             let action = recovery_modal::show(ctx, &self.pending_recoveries);
             if !matches!(action, RecoveryAction::None) {
                 self.apply_recovery_action(action);
+            }
+        }
+
+        // ── dirty-close confirm modal ───────────────────────────────────
+        if let Some(&idx) = self.pending_close.first() {
+            if idx >= self.tabs.len() {
+                self.pending_close.remove(0);
+            } else {
+                let name = self.tabs[idx].display_name.clone();
+                let count = self.pending_close.len();
+                let action = close_confirm_modal::show(ctx, &name, count);
+                match action {
+                    CloseConfirmAction::None => {}
+                    CloseConfirmAction::Save => {
+                        let prev_active = self.active_tab;
+                        self.active_tab = idx;
+                        self.save_active();
+                        // If save succeeded the tab is now clean; close it.
+                        if !self
+                            .tabs
+                            .get(idx)
+                            .map(|t| t.is_dirty())
+                            .unwrap_or(false)
+                        {
+                            self.force_close_tab(idx);
+                            self.pending_close.remove(0);
+                            // Fix up other pending indices: anything > idx
+                            // shifts down by 1.
+                            for p in &mut self.pending_close {
+                                if *p > idx {
+                                    *p -= 1;
+                                }
+                            }
+                        }
+                        // Restore active focus where possible.
+                        if prev_active < self.tabs.len() {
+                            self.active_tab = prev_active;
+                        }
+                    }
+                    CloseConfirmAction::Discard => {
+                        self.force_close_tab(idx);
+                        self.pending_close.remove(0);
+                        for p in &mut self.pending_close {
+                            if *p > idx {
+                                *p -= 1;
+                            }
+                        }
+                    }
+                    CloseConfirmAction::Cancel => {
+                        self.pending_close.clear();
+                    }
+                }
             }
         }
 
