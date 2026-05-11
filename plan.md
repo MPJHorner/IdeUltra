@@ -6,6 +6,8 @@ The brief: file browser on the left, text editor in the middle, the basics you'd
 
 ---
 
+
+
 ## 1. Goals and Non-Goals
 
 ### Goals (MVP)
