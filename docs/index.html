@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IdeUltra — a snappy, native, local-first code IDE</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="IdeUltra is a fast, native code editor in the Ultra family. Pure Rust + egui, single binary, zero telemetry, MIT.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site">
+  <a class="brand" href="./">IdeUltra</a>
+  <nav>
+    <a href="install.html">Install</a>
+    <a href="quickstart.html">Quick Start</a>
+    <a href="shortcuts.html">Shortcuts</a>
+    <a href="preferences.html">Preferences</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="https://github.com/MPJHorner/IdeUltra">GitHub</a>
+  </nav>
+</header>
+
+<main>
+
+  <section class="hero">
+    <h1>IdeUltra</h1>
+    <p class="tag">A snappy, native, local-first code IDE. Open a folder, edit, save. That's it.</p>
+
+<pre><code>git clone https://github.com/MPJHorner/IdeUltra.git
+cd IdeUltra
+cargo run --release</code></pre>
+
+    <p style="margin-top:8px;color:var(--fg-dim);font-size:14px">
+      Part of the <strong>Ultra</strong> family —
+      <a href="https://mpjhorner.github.io/MailboxUltra/">MailboxUltra</a>,
+      <a href="https://mpjhorner.github.io/PostbinUltra/">PostbinUltra</a>.
+      Pure Rust + egui. Single ~7 MB binary. Zero telemetry. MIT.
+    </p>
+  </section>
+
+  <h2>Why IdeUltra</h2>
+  <div class="features">
+    <div class="feature">
+      <h3>Snappy</h3>
+      <p>Cold start under 150ms. Keystroke-to-paint under 16ms. No web stack.</p>
+    </div>
+    <div class="feature">
+      <h3>Native</h3>
+      <p>Real macOS window, native folder pickers, native menu bar. No Electron, no webview.</p>
+    </div>
+    <div class="feature">
+      <h3>Local-first</h3>
+      <p>Files on disk. State in JSON. No cloud, no telemetry, no sign-in.</p>
+    </div>
+    <div class="feature">
+      <h3>Familiar</h3>
+      <p>File tree, tabs, find &amp; replace, syntax highlighting, light/dark. Just the basics, done well.</p>
+    </div>
+    <div class="feature">
+      <h3>Watchful</h3>
+      <p>External edits update clean buffers silently. Dirty buffers show a reload banner. Never overwrite by accident.</p>
+    </div>
+    <div class="feature">
+      <h3>Session-aware</h3>
+      <p>Quit and relaunch — your folder, tabs, theme, zoom and window all come back.</p>
+    </div>
+  </div>
+
+  <h2>30-second tour</h2>
+  <ol>
+    <li>Press <code>⇧⌘O</code> to open a folder.</li>
+    <li>Click a file in the sidebar. It opens in a tab. Click another file — second tab.</li>
+    <li>Type. Hit <code>⌘S</code>. The dot in the tab and window title disappears.</li>
+    <li>Press <code>⌘F</code> to find. <code>Enter</code> jumps to the next match. <code>⌥⌘F</code> for find &amp; replace.</li>
+    <li>Press <code>⌘G</code> to jump to a line. <code>⌘B</code> to toggle the sidebar.</li>
+    <li>Quit. Relaunch. Everything's back.</li>
+  </ol>
+
+  <h2>Use cases</h2>
+  <ul>
+    <li><strong>Quick edits without booting VS Code.</strong> Open a config file, tweak two lines, save, done.</li>
+    <li><strong>Reviewing a downloaded repo.</strong> Get instant syntax-highlighted browsing without indexing.</li>
+    <li><strong>Pairing with coding agents.</strong> Watch agent edits land in real time via the file watcher.</li>
+    <li><strong>SSH sessions and battery-conscious laptops.</strong> A 7 MB binary that doesn't fan-up your machine.</li>
+  </ul>
+
+  <h2>Status</h2>
+  <p>
+    <strong>v0.1.0</strong> — Initial MVP release. Ten deliverables (D1–D10), all shipped.
+    See the <a href="changelog.html">changelog</a> and the
+    <a href="https://github.com/MPJHorner/IdeUltra/blob/main/plan.md">build plan</a>.
+  </p>
+
+  <div class="callout">
+    <strong>macOS unsigned-app note:</strong> the v0.1.0 binary is not yet
+    notarised. On first launch macOS will refuse to open it; right-click
+    the app in Finder and choose <em>Open</em>, or run
+    <code>xattr -d com.apple.quarantine /Applications/IdeUltra.app</code>.
+  </div>
+
+</main>
+
+<footer class="site">
+  <a href="install.html">Install</a> ·
+  <a href="quickstart.html">Quick Start</a> ·
+  <a href="shortcuts.html">Shortcuts</a> ·
+  <a href="preferences.html">Preferences</a> ·
+  <a href="use-cases.html">Use Cases</a> ·
+  <a href="changelog.html">Changelog</a> ·
+  <a href="https://github.com/MPJHorner/IdeUltra">GitHub</a> ·
+  <a href="https://github.com/MPJHorner/IdeUltra/issues">Issues</a>
+  <br>
+  <span style="opacity:.7">MIT licensed · zero telemetry · part of the Ultra family</span>
+</footer>
+
+</body>
+</html>

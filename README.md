@@ -7,7 +7,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 - Zero telemetry, MIT licensed
 - Built for **speed** — startup under 150ms, keystroke-to-paint under 16ms
 
-> **Status:** feature-complete MVP. Open a folder, browse, edit with syntax highlighting, find/replace, go-to-line. Tabs, theme, zoom, window and folder all persist. External file changes propagate live — clean buffers reload silently, dirty buffers show a "Reload / Keep mine" banner. D10 (packaging + docs site) is next. See [`plan.md`](./plan.md).
+> **Status:** v0.1.0 — feature-complete MVP. All ten deliverables shipped. Docs at <https://mpjhorner.github.io/IdeUltra/>. See [`plan.md`](./plan.md) for the deliverable-ordered build log.
 
 ## Shortcuts
 
@@ -53,6 +53,16 @@ cd IdeUltra
 cargo run --release
 ```
 
+## Build a .app and .dmg
+
+```bash
+./scripts/package.sh 0.1.0
+# → dist/IdeUltra.app
+# → dist/IdeUltra-0.1.0.dmg
+```
+
+arm64 only for v0.1.0; universal binary (Intel + arm64) is planned for v0.1.1.
+
 ## Roadmap
 
 The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
@@ -68,7 +78,9 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | D7  | Status bar & shortcuts | shipped |
 | D8  | Persistence | shipped |
 | D9  | File watching | shipped |
-| D10 | Packaging + docs site | next |
+| D10 | Packaging + docs site | shipped |
+
+**MVP complete.** Tagged `v0.1.0`. Docs live at <https://mpjhorner.github.io/IdeUltra/>.
 
 ## License
 

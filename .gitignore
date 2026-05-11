@@ -4,3 +4,6 @@
 Cargo.lock.bak
 .DS_Store
 *.swp
+docs/_site
+docs/.jekyll-cache
+docs/.jekyll-metadata
