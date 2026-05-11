@@ -20,6 +20,10 @@ pub struct EditorTab {
     /// Set when the watcher saw the file change while we had unsaved
     /// edits, OR when we couldn't reload it automatically.
     pub external_change: bool,
+    /// Hash of the last contents we wrote to the crash-recovery store.
+    /// Lets the app skip the write when nothing has changed since the
+    /// last recovery snapshot — cheap dirty-check.
+    pub last_recovered_hash: Option<u64>,
 }
 
 impl EditorTab {
@@ -40,7 +44,32 @@ impl EditorTab {
             syntax_name: syntax.name.clone(),
             highlight: HighlightCache::default(),
             external_change: false,
+            last_recovered_hash: None,
         })
+    }
+
+    /// Build a tab from a path plus contents already in memory.
+    /// Used by the crash-recovery flow.
+    pub fn from_recovered(path: PathBuf, recovered_text: String) -> Self {
+        let display_name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("untitled")
+            .to_string();
+        let syntax = syntax_for_path(&path);
+        let mut buf = Buffer::new(String::new());
+        // Treat the recovered text as "edited since saved" so the dirty dot
+        // appears and the user sees they should save.
+        buf.text = recovered_text;
+        Self {
+            buffer: buf,
+            path,
+            display_name,
+            syntax_name: syntax.name.clone(),
+            highlight: HighlightCache::default(),
+            external_change: false,
+            last_recovered_hash: None,
+        }
     }
 
     /// Re-read the file from disk into the buffer. Clears `external_change`

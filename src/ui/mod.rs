@@ -4,5 +4,6 @@ pub mod find_bar;
 pub mod finder_modal;
 pub mod highlight;
 pub mod project_search_panel;
+pub mod recovery_modal;
 pub mod sidebar;
 pub mod tabs;

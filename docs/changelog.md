@@ -18,6 +18,13 @@ permalink: /changelog.html
   action — File, Edit, Go, View. Reuses the fuzzy file finder's scorer so
   partial queries like "theme dark" rank the right command first. Adding a
   new command is a compile error anywhere that doesn't handle it.
+- **Crash recovery for dirty buffers.** Every dirty buffer gets a snapshot
+  written to `~/Library/Application Support/com.mpjhorner.IdeUltra/recovery/`
+  on a 1-second debounce. On normal save the snapshot is dropped. After a
+  crash or force-quit, the next launch shows a modal listing the unsaved
+  buffers and offers **Restore all**, **Discard all**, or **Decide later**.
+  Recoveries whose original file has been saved through some other channel
+  (mtime is newer than the recovery) are silently cleaned up on scan.
 - Index auto-invalidates when the file watcher sees creates / removes /
   renames, so quickly-cloned repos always see their latest shape.
 

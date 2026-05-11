@@ -8,6 +8,7 @@ mod finder;
 mod logging;
 mod persistence;
 mod project_search;
+mod recovery;
 mod ui;
 mod workspace;
 

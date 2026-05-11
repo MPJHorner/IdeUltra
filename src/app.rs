@@ -13,6 +13,7 @@ use crate::persistence::{Loaded, Saver, SessionState, Settings, WindowState};
 use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::command_palette::CommandId;
+use crate::recovery::{Recovery, RecoveryStore, RECOVERY_DEBOUNCE_MS};
 use crate::ui::command_palette_modal::{
     self, CommandPaletteAction, CommandPaletteState,
 };
@@ -20,6 +21,7 @@ use crate::ui::finder_modal::{self, FinderAction, FinderState};
 use crate::ui::project_search_panel::{
     self, ProjectSearchAction, ProjectSearchState,
 };
+use crate::ui::recovery_modal::{self, RecoveryAction};
 use crate::ui::{
     editor_panel,
     sidebar::{self, SidebarAction},
@@ -52,6 +54,11 @@ pub struct IdeUltraApp {
     finder: FinderState,
     project_search: ProjectSearchState,
     palette: CommandPaletteState,
+    recovery_store: Option<RecoveryStore>,
+    /// Recoveries surfaced at startup, awaiting the user's choice.
+    pending_recoveries: Vec<Recovery>,
+    /// Per-tab cooldown timestamps so we don't fsync on every keystroke.
+    last_recovery_write: std::collections::HashMap<PathBuf, std::time::Instant>,
 }
 
 impl IdeUltraApp {
@@ -82,7 +89,22 @@ impl IdeUltraApp {
             finder: FinderState::default(),
             project_search: ProjectSearchState::default(),
             palette: CommandPaletteState::default(),
+            recovery_store: RecoveryStore::from_project_dirs(),
+            pending_recoveries: Vec::new(),
+            last_recovery_write: Default::default(),
         };
+
+        // Surface anything left over from a previous crash / force-quit.
+        // We don't restore automatically — the user decides.
+        if let Some(store) = &app.recovery_store {
+            app.pending_recoveries = store.scan();
+            if !app.pending_recoveries.is_empty() {
+                tracing::info!(
+                    count = app.pending_recoveries.len(),
+                    "found recoverable buffers"
+                );
+            }
+        }
 
         // Restore the last workspace (if any) and the tabs that were open.
         if let Some(folder) = &loaded.session.last_folder {
@@ -269,6 +291,11 @@ impl IdeUltraApp {
                 Ok(_) => {
                     let msg = format!("Saved {}", tab.display_name);
                     tracing::info!(file = %tab.path.display(), "saved");
+                    // Drop the recovery snapshot — the buffer is on disk now.
+                    if let Some(store) = &self.recovery_store {
+                        let _ = store.clear(&tab.path);
+                    }
+                    tab.last_recovered_hash = None;
                     self.flash(msg);
                 }
                 Err(err) => {
@@ -279,9 +306,100 @@ impl IdeUltraApp {
         }
     }
 
+    fn write_recoveries(&mut self) {
+        let Some(store) = self.recovery_store.as_ref() else {
+            return;
+        };
+        let now = std::time::Instant::now();
+        for tab in self.tabs.iter_mut() {
+            if !tab.is_dirty() {
+                continue;
+            }
+            // Per-tab debounce.
+            if let Some(last) = self.last_recovery_write.get(&tab.path) {
+                if now.duration_since(*last)
+                    < std::time::Duration::from_millis(RECOVERY_DEBOUNCE_MS)
+                {
+                    continue;
+                }
+            }
+            // Skip when content is unchanged from the last snapshot.
+            let h = {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hh = DefaultHasher::new();
+                tab.buffer.text.hash(&mut hh);
+                hh.finish()
+            };
+            if tab.last_recovered_hash == Some(h) {
+                self.last_recovery_write.insert(tab.path.clone(), now);
+                continue;
+            }
+            match store.write(&tab.path, &tab.buffer.text) {
+                Ok(_) => {
+                    tab.last_recovered_hash = Some(h);
+                    self.last_recovery_write.insert(tab.path.clone(), now);
+                }
+                Err(err) => {
+                    tracing::warn!(error = %err, path = %tab.path.display(), "recovery write failed");
+                }
+            }
+        }
+    }
+
+    fn apply_recovery_action(&mut self, action: RecoveryAction) {
+        match action {
+            RecoveryAction::None => {}
+            RecoveryAction::Dismiss => {
+                // Drop the list so we don't keep rendering the modal. The
+                // recovery files stay on disk for the next launch.
+                self.pending_recoveries.clear();
+            }
+            RecoveryAction::DiscardAll => {
+                if let Some(store) = &self.recovery_store {
+                    if let Err(err) = store.clear_all() {
+                        tracing::warn!(error = %err, "clear_all failed");
+                    }
+                }
+                self.pending_recoveries.clear();
+                self.flash("Discarded unsaved drafts");
+            }
+            RecoveryAction::RestoreAll => {
+                let mut restored = 0usize;
+                let recoveries = std::mem::take(&mut self.pending_recoveries);
+                for r in recoveries {
+                    // If the file is already open in a tab, just push the
+                    // recovered text into the existing buffer.
+                    if let Some(idx) =
+                        self.tabs.iter().position(|t| t.path == r.meta.path)
+                    {
+                        self.tabs[idx].buffer.text = r.contents;
+                        restored += 1;
+                    } else {
+                        let tab = EditorTab::from_recovered(r.meta.path, r.contents);
+                        self.tabs.push(tab);
+                        self.active_tab = self.tabs.len() - 1;
+                        restored += 1;
+                    }
+                }
+                self.flash(format!("Restored {restored} buffer(s) — save when ready"));
+            }
+        }
+    }
+
     fn close_tab(&mut self, idx: usize) {
         if idx >= self.tabs.len() {
             return;
+        }
+        // If the user closes a dirty tab without saving, *keep* the
+        // recovery snapshot — they may want it back next launch.
+        // If the tab is clean, drop the snapshot.
+        if let Some(tab) = self.tabs.get(idx) {
+            if !tab.is_dirty() {
+                if let Some(store) = &self.recovery_store {
+                    let _ = store.clear(&tab.path);
+                }
+            }
         }
         self.tabs.remove(idx);
         if self.active_tab >= self.tabs.len() && !self.tabs.is_empty() {
@@ -680,6 +798,7 @@ impl eframe::App for IdeUltraApp {
         self.apply_theme(ctx);
         self.read_window_state(ctx);
         self.drain_watcher();
+        self.write_recoveries();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.window_title()));
 
         // ── menu bar ─────────────────────────────────────────────────────
@@ -990,6 +1109,14 @@ impl eframe::App for IdeUltraApp {
                     .map(|ci| line_col_at_char(&tab.buffer.text, ci));
             }
         });
+
+        // ── recovery modal (startup) ────────────────────────────────────
+        if !self.pending_recoveries.is_empty() {
+            let action = recovery_modal::show(ctx, &self.pending_recoveries);
+            if !matches!(action, RecoveryAction::None) {
+                self.apply_recovery_action(action);
+            }
+        }
 
         // ── command palette (⇧⌘P) ───────────────────────────────────────
         if self.palette.open {
