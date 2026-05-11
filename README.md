@@ -21,6 +21,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 | `⌘1`…`⌘9` | Jump to tab N |
 | `⌘F` | Find |
 | `⌥⌘F` | Find & Replace |
+| `⇧⌘F` | Search in project |
 | `Enter` / `⇧Enter` | Next / previous match |
 | `Esc` | Close find bar |
 | `⌘P` | Go to file (fuzzy finder) |
@@ -34,7 +35,7 @@ A snappy, native, local-first code IDE. Part of the **Ultra** family — alongsi
 cargo test
 ```
 
-55 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour (lazy load, sorting, gitignore, invalidate-on-change), line/column conversion, line-ending detection, settings/session persistence (round-trip, atomic writes, missing-tab cleanup, debounce), and fuzzy file finder scoring + indexing.
+64 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour (lazy load, sorting, gitignore, invalidate-on-change), line/column conversion, line-ending detection, settings/session persistence (round-trip, atomic writes, missing-tab cleanup, debounce), fuzzy file finder scoring + indexing, and project-wide search (line numbers, binary detection, multi-file aggregation, regex errors).
 
 ## State files
 
@@ -88,6 +89,7 @@ The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
 | | Feature | Status |
 |-|-|-|
 | 1 | Fuzzy file finder (⌘P) | shipped on `main` |
+| 2 | Project-wide search (⇧⌘F) | shipped on `main` |
 
 ## License
 

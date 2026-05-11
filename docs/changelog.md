@@ -9,6 +9,11 @@ permalink: /changelog.html
   Arrow keys navigate, Enter opens, Esc closes. Up to 50,000 files indexed
   per workspace; results re-rank on every keystroke. Word-boundary and
   prefix matches outscore arbitrary subsequence matches.
+- **Project-wide search (⇧⌘F).** Search a query across every file in the
+  workspace. Results are grouped by file with the matching line and 1-based
+  line number; click a line to open the file and jump to the match. Reuses
+  the find bar's case / whole-word / regex toggles. Files larger than 1 MB
+  and binary files are skipped. Capped at 500 results to keep the UI snappy.
 - Index auto-invalidates when the file watcher sees creates / removes /
   renames, so quickly-cloned repos always see their latest shape.
 

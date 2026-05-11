@@ -13,6 +13,9 @@ use crate::persistence::{Loaded, Saver, SessionState, Settings, WindowState};
 use crate::ui::editor_panel::Jump;
 use crate::ui::find_bar::{self, FindAction, FindState};
 use crate::ui::finder_modal::{self, FinderAction, FinderState};
+use crate::ui::project_search_panel::{
+    self, ProjectSearchAction, ProjectSearchState,
+};
 use crate::ui::{
     editor_panel,
     sidebar::{self, SidebarAction},
@@ -43,6 +46,7 @@ pub struct IdeUltraApp {
     saver: Saver,
     window_state: WindowState,
     finder: FinderState,
+    project_search: ProjectSearchState,
 }
 
 impl IdeUltraApp {
@@ -71,6 +75,7 @@ impl IdeUltraApp {
             saver: Saver::new(loaded.paths.clone()),
             window_state: loaded.session.window.clone(),
             finder: FinderState::default(),
+            project_search: ProjectSearchState::default(),
         };
 
         // Restore the last workspace (if any) and the tabs that were open.
@@ -302,6 +307,7 @@ impl IdeUltraApp {
         let mut zoom_reset = false;
         let mut open_goto = false;
         let mut open_finder = false;
+        let mut open_project_search = false;
 
         ctx.input_mut(|i| {
             use egui::{Key, KeyboardShortcut, Modifiers};
@@ -333,13 +339,25 @@ impl IdeUltraApp {
             if self.find.open && i.key_pressed(Key::Escape) {
                 find_close = true;
             }
+            if self.project_search.open
+                && i.key_pressed(Key::Escape)
+                && !self.find.open
+                && !self.finder.open
+                && !self.goto_open
+            {
+                // Esc closes project search only if no higher-priority overlay
+                // is open — those have already consumed Esc above.
+                self.project_search.close();
+            }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::B)) {
                 toggle_sidebar = true;
             }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::G)) {
                 open_goto = true;
             }
-            if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::P)) {
+            if i.consume_shortcut(&KeyboardShortcut::new(cmd_shift, Key::F)) {
+                open_project_search = true;
+            } else if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::P)) {
                 open_finder = true;
             }
             if i.consume_shortcut(&KeyboardShortcut::new(cmd, Key::Equals))
@@ -438,6 +456,43 @@ impl IdeUltraApp {
         if open_finder {
             self.open_finder();
         }
+        if open_project_search {
+            self.open_project_search();
+        }
+    }
+
+    fn open_project_search(&mut self) {
+        if self.workspace.is_none() {
+            self.flash("Open a folder first (⇧⌘O)");
+            return;
+        }
+        self.project_search.open();
+    }
+
+    fn run_project_search(&mut self) {
+        let Some(ws) = self.workspace.as_mut() else {
+            return;
+        };
+        ws.ensure_index();
+        let Some(index) = ws.file_index.as_ref() else {
+            return;
+        };
+        let outcome = crate::project_search::search_workspace(
+            index,
+            &self.project_search.query,
+            self.project_search.options,
+        );
+        tracing::info!(
+            query = %self.project_search.query,
+            matches = outcome.total_matches,
+            files = outcome.hits.len(),
+            scanned = outcome.files_scanned,
+            skipped = outcome.files_skipped,
+            truncated = outcome.truncated,
+            "project search complete"
+        );
+        self.project_search.outcome = Some(outcome);
+        self.project_search.dirty = false;
     }
 
     fn open_finder(&mut self) {
@@ -608,6 +663,10 @@ impl eframe::App for IdeUltraApp {
                         ui.close_menu();
                         self.open_finder();
                     }
+                    if ui.button("Search in Project…  ⇧⌘F").clicked() {
+                        ui.close_menu();
+                        self.open_project_search();
+                    }
                     if ui.button("Go to Line…  ⌘G").clicked() {
                         ui.close_menu();
                         if !self.tabs.is_empty() {
@@ -709,27 +768,49 @@ impl eframe::App for IdeUltraApp {
             }
         }
 
-        // ── sidebar ──────────────────────────────────────────────────────
+        // ── sidebar (file tree OR project search) ───────────────────────
         let mut file_to_open: Option<PathBuf> = None;
-        if self.sidebar_visible {
+        let mut project_jump: Option<(PathBuf, std::ops::Range<usize>)> = None;
+        let mut run_search = false;
+        if self.sidebar_visible || self.project_search.open {
             if let Some(ws) = self.workspace.as_mut() {
                 SidePanel::left("sidebar")
                     .resizable(true)
                     .default_width(self.sidebar_width)
-                    .min_width(160.0)
+                    .min_width(220.0)
                     .max_width(600.0)
                     .show(ctx, |ui| {
                         self.sidebar_width = ui.available_width();
-                        let action = sidebar::show(ui, &mut ws.tree);
-                        if let SidebarAction::OpenFile(path) = action {
-                            file_to_open = Some(path);
+                        if self.project_search.open {
+                            let action =
+                                project_search_panel::show(ui, &mut self.project_search);
+                            match action {
+                                ProjectSearchAction::None => {}
+                                ProjectSearchAction::Run => run_search = true,
+                                ProjectSearchAction::OpenAt { path, byte_range } => {
+                                    project_jump = Some((path, byte_range));
+                                }
+                            }
+                        } else {
+                            let action = sidebar::show(ui, &mut ws.tree);
+                            if let SidebarAction::OpenFile(path) = action {
+                                file_to_open = Some(path);
+                            }
                         }
                     });
             }
         }
+        if run_search {
+            self.run_project_search();
+        }
         if let Some(path) = file_to_open {
             self.open_file(&path);
         }
+        // Pull the project-search jump out of the borrow scope before opening.
+        let project_jump_pending = project_jump.map(|(p, r)| {
+            self.open_file(&p);
+            r
+        });
 
         // Keep matches fresh before rendering the bar (so the count reflects
         // the current buffer & query).
@@ -824,7 +905,9 @@ impl eframe::App for IdeUltraApp {
             }
 
             // Editor
-            let jump: Option<Jump> = if self.find.scroll_pending {
+            let jump: Option<Jump> = if let Some(r) = project_jump_pending {
+                Some(Jump::ByteRange(r))
+            } else if self.find.scroll_pending {
                 self.find.scroll_pending = false;
                 self.find
                     .matches

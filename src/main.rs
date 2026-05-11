@@ -6,6 +6,7 @@ mod find;
 mod finder;
 mod logging;
 mod persistence;
+mod project_search;
 mod ui;
 mod workspace;
 

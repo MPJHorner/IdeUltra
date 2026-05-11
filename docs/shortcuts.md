@@ -28,6 +28,7 @@ The full keymap for v0.1.0.
 |-|-|
 | <code>⌘F</code> | Open find bar |
 | <code>⌥⌘F</code> | Open find &amp; replace |
+| <code>⇧⌘F</code> | Search across the project |
 | <code>Enter</code> | Next match |
 | <code>⇧Enter</code> | Previous match |
 | <code>Esc</code> | Close find bar |
