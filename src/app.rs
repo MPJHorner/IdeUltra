@@ -606,6 +606,50 @@ impl IdeUltraApp {
             }
         });
 
+        // 1b. Tab / Shift+Tab on a multi-line selection indents the selection
+        //     rather than inserting a literal tab. Single-caret Tab falls
+        //     through to the TextEdit (we don't consume the event then).
+        let active_path = self
+            .tabs
+            .get(self.active_tab)
+            .map(|t| t.path.clone());
+        if let Some(path) = &active_path {
+            let editor_id = egui::Id::new(("ide_editor", path.as_path()));
+            let selection = egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+                .and_then(|s| s.cursor.char_range())
+                .map(|r| (r.primary.index, r.secondary.index));
+            let multi_line = selection
+                .map(|sel| {
+                    let text = self
+                        .tabs
+                        .get(self.active_tab)
+                        .map(|t| t.buffer.text.as_str())
+                        .unwrap_or("");
+                    crosses_newline(text, sel)
+                })
+                .unwrap_or(false);
+            if multi_line {
+                let mut did_indent = false;
+                let mut did_dedent = false;
+                ctx.input_mut(|i| {
+                    use egui::{Key, Modifiers};
+                    if i.consume_key(Modifiers::SHIFT, Key::Tab)
+                        || i.consume_key(Modifiers::NONE, Key::Tab)
+                            && i.modifiers.shift
+                    {
+                        did_dedent = true;
+                    } else if i.consume_key(Modifiers::NONE, Key::Tab) {
+                        did_indent = true;
+                    }
+                });
+                if did_indent {
+                    self.apply_indent(ctx, false);
+                } else if did_dedent {
+                    self.apply_indent(ctx, true);
+                }
+            }
+        }
+
         // 2. Tab navigation (Cmd+[ / Cmd+] / Cmd+1..9) is fixed across
         //    presets — these are universal Mac conventions.
         ctx.input_mut(|i| {
@@ -746,6 +790,34 @@ impl IdeUltraApp {
             CommandId::KeymapVsCode => self.switch_keymap(KeymapPreset::VsCode),
             CommandId::KeymapPhpStorm => self.switch_keymap(KeymapPreset::PhpStorm),
             CommandId::ToggleLineComment => self.toggle_line_comment(ctx),
+        }
+    }
+
+    fn apply_indent(&mut self, ctx: &Context, dedent: bool) {
+        let Some(tab) = self.tabs.get_mut(self.active_tab) else {
+            return;
+        };
+        let editor_id = egui::Id::new(("ide_editor", tab.path.as_path()));
+        let selection = egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+            .and_then(|s| s.cursor.char_range())
+            .map(|r| (r.primary.index, r.secondary.index))
+            .unwrap_or((0, 0));
+        let unit = "    "; // 4 spaces — tabs vs spaces preference is a v0.7 setting
+        let result = if dedent {
+            crate::indent::dedent(&tab.buffer.text, selection, unit)
+        } else {
+            crate::indent::indent(&tab.buffer.text, selection, unit)
+        };
+        tab.buffer.text = result.new_text;
+        if let Some(mut state) =
+            egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+        {
+            use egui::text::{CCursor, CCursorRange};
+            state.cursor.set_char_range(Some(CCursorRange::two(
+                CCursor::new(result.new_range.0),
+                CCursor::new(result.new_range.1),
+            )));
+            state.store(ctx, editor_id);
         }
     }
 
@@ -924,6 +996,18 @@ fn display_recent(path: &Path) -> String {
         }
     }
     path.display().to_string()
+}
+
+fn crosses_newline(text: &str, selection: (usize, usize)) -> bool {
+    let (a, b) = if selection.0 <= selection.1 {
+        selection
+    } else {
+        (selection.1, selection.0)
+    };
+    if a == b {
+        return false;
+    }
+    text.chars().skip(a).take(b - a).any(|c| c == '\n')
 }
 
 fn is_markdown(path: &Path) -> bool {

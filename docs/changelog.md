@@ -3,8 +3,12 @@ title: Changelog
 permalink: /changelog.html
 ---
 
-## v0.6.0 — unreleased (on `main`)
+## v0.6.0 — 2026-05-11
 
+- **Indent / dedent on selection (Tab / Shift+Tab).** When the
+  selection spans more than one line, Tab indents each line by 4
+  spaces and Shift+Tab removes one indent unit (tab or up-to-4 spaces).
+  Single-caret Tab still inserts a literal tab character.
 - **Dirty-close confirm.** Closing a tab with unsaved changes now
   prompts: **Save**, **Don't Save**, or **Cancel**. Save writes through
   and closes; Don't Save discards the buffer (and its crash-recovery

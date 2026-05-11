@@ -8,6 +8,7 @@ mod editor;
 mod find;
 mod finder;
 mod git;
+mod indent;
 mod keymap;
 mod logging;
 mod markdown;
