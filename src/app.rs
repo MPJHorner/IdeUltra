@@ -688,6 +688,44 @@ impl IdeUltraApp {
             CommandId::KeymapDefault => self.switch_keymap(KeymapPreset::Default),
             CommandId::KeymapVsCode => self.switch_keymap(KeymapPreset::VsCode),
             CommandId::KeymapPhpStorm => self.switch_keymap(KeymapPreset::PhpStorm),
+            CommandId::ToggleLineComment => self.toggle_line_comment(ctx),
+        }
+    }
+
+    fn toggle_line_comment(&mut self, ctx: &Context) {
+        let Some(tab) = self.tabs.get_mut(self.active_tab) else {
+            return;
+        };
+        let syntax = tab.syntax();
+        let Some(token) = crate::comment::line_comment_token(syntax) else {
+            self.flash(format!(
+                "No line comment for {}",
+                crate::editor::language::language_label(syntax)
+            ));
+            return;
+        };
+
+        // Pull the current caret range from the TextEdit (char indices).
+        let editor_id = egui::Id::new(("ide_editor", tab.path.as_path()));
+        let selection = egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+            .and_then(|s| s.cursor.char_range())
+            .map(|r| (r.primary.index, r.secondary.index))
+            .unwrap_or((0, 0));
+
+        let result =
+            crate::comment::toggle_line_comment(&tab.buffer.text, selection, token);
+        tab.buffer.text = result.new_text;
+
+        // Restore selection so the user can keep toggling without losing place.
+        if let Some(mut state) =
+            egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+        {
+            use egui::text::{CCursor, CCursorRange};
+            state.cursor.set_char_range(Some(CCursorRange::two(
+                CCursor::new(result.new_range.0),
+                CCursor::new(result.new_range.1),
+            )));
+            state.store(ctx, editor_id);
         }
     }
 
@@ -835,6 +873,15 @@ fn is_markdown(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|s| s.to_str()),
         Some("md" | "markdown" | "mdx" | "mkd")
+    )
+}
+
+/// Tabs we'd want a word count for in the status bar: markdown plus
+/// other prose-shaped extensions.
+fn is_prose(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("md" | "markdown" | "mdx" | "mkd" | "txt" | "rst" | "adoc")
     )
 }
 
@@ -1035,19 +1082,26 @@ impl eframe::App for IdeUltraApp {
                         .caret_line_col
                         .map(|(l, c)| format!("Ln {l}, Col {c}"))
                         .unwrap_or_else(|| "—".to_string());
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{}{}  ·  {}  ·  {}  ·  UTF-8  ·  {} bytes  ·  {}",
-                            tab.path.display(),
-                            dirty,
-                            pos,
-                            ending,
-                            tab.buffer.text.len(),
-                            lang,
-                        ))
-                        .small()
-                        .weak(),
+                    let mut left = format!(
+                        "{}{}  ·  {}  ·  {}  ·  UTF-8  ·  {} bytes  ·  {}",
+                        tab.path.display(),
+                        dirty,
+                        pos,
+                        ending,
+                        tab.buffer.text.len(),
+                        lang,
                     );
+                    // For prose-y tabs, append word count + reading time.
+                    if is_prose(&tab.path) {
+                        let stats = crate::wordcount::analyze(&tab.buffer.text);
+                        if stats.words > 0 {
+                            left = format!(
+                                "{left}  ·  {} words  ·  ~{} min read",
+                                stats.words, stats.minutes
+                            );
+                        }
+                    }
+                    ui.label(egui::RichText::new(left).small().weak());
                 } else {
                     ui.label(
                         egui::RichText::new("No file open")

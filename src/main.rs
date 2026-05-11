@@ -2,6 +2,7 @@
 
 mod app;
 mod command_palette;
+mod comment;
 mod diff;
 mod editor;
 mod find;
@@ -17,6 +18,7 @@ mod recovery;
 mod style;
 mod transforms;
 mod ui;
+mod wordcount;
 mod workspace;
 
 use anyhow::Result;

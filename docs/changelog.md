@@ -3,6 +3,17 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.6.0 — unreleased (on `main`)
+
+- **Toggle line comment (⌘/).** Comments or uncomments the current line
+  (or every line in the selection) using the language-appropriate token —
+  `//`, `#`, `--`. Indented lines insert the token after the leading
+  whitespace, so existing indentation is preserved. Wrap-style markup
+  languages (HTML, CSS) are not yet supported and will no-op with a flash.
+- **Word count + reading time** in the status bar for prose tabs
+  (`.md` / `.markdown` / `.txt` / `.rst` / `.adoc`). Counts words via a
+  single Unicode-aware pass; reading time assumes 225 wpm.
+
 ## v0.5.0 — 2026-05-11
 
 - **Keymap presets.** Pick **IdeUltra Default**, **VS Code**, or

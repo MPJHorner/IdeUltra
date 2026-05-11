@@ -22,6 +22,12 @@ The full keymap for v0.1.0.
 | <code>⌘]</code> | Next tab |
 | <code>⌘1</code>…<code>⌘9</code> | Jump to tab N |
 
+## Editing
+
+| Shortcut | Action |
+|-|-|
+| <code>⌘/</code> | Toggle line comment |
+
 ## Find &amp; replace
 
 | Shortcut | Action |
