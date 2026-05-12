@@ -16,6 +16,10 @@ pub struct FindState {
     pub last_error: Option<String>,
     /// Cleared after the editor scrolls to the current match.
     pub scroll_pending: bool,
+    /// When `Some((start, end))` (byte range), find/replace runs only
+    /// against text inside that range. Set by `open_find_in_selection`
+    /// from the app when the bar is opened with a multi-line selection.
+    pub scope: Option<(usize, usize)>,
 }
 
 impl FindState {
@@ -29,19 +33,38 @@ impl FindState {
         self.show_replace = true;
     }
 
+    /// Open the find bar scoped to a byte-range. Used when invoked
+    /// while the editor has a multi-line selection active.
+    pub fn open_in_selection(&mut self, scope: (usize, usize)) {
+        self.open = true;
+        self.show_replace = false;
+        self.scope = Some(scope);
+    }
+
     pub fn close(&mut self) {
         self.open = false;
+        self.scope = None;
     }
 
     /// Re-run the search against `text`. Cheap to call every frame —
     /// callers can skip when query/options/buffer haven't changed.
+    /// If `scope` is `Some`, only matches inside that byte range are
+    /// kept; their positions stay buffer-relative.
     pub fn refresh(&mut self, text: &str) {
-        match find_matches(text, &self.query, self.options) {
+        let (slice, offset) = match self.scope {
+            Some((a, b)) if b <= text.len() => (&text[a..b], a),
+            _ => (text, 0),
+        };
+        match find_matches(slice, &self.query, self.options) {
             Ok(m) => {
-                if self.current >= m.len() {
+                let shifted: Vec<Range<usize>> = m
+                    .into_iter()
+                    .map(|r| (r.start + offset)..(r.end + offset))
+                    .collect();
+                if self.current >= shifted.len() {
                     self.current = 0;
                 }
-                self.matches = m;
+                self.matches = shifted;
                 self.last_error = None;
             }
             Err(FindError::InvalidRegex(e)) => {
@@ -122,6 +145,15 @@ pub fn show(ui: &mut Ui, state: &mut FindState) -> FindAction {
                 .on_hover_text("Whole word");
             ui.toggle_value(&mut state.options.regex, ".*")
                 .on_hover_text("Regex");
+            if state.scope.is_some() {
+                if ui
+                    .selectable_label(true, "In selection")
+                    .on_hover_text("Restricted to the original selection. Click to clear.")
+                    .clicked()
+                {
+                    state.scope = None;
+                }
+            }
 
             ui.separator();
             if ui

@@ -722,6 +722,32 @@ impl IdeUltraApp {
         self.saver.mark_dirty();
     }
 
+    fn reorder_tab(&mut self, from: usize, to: usize) {
+        if from >= self.tabs.len() || from == to {
+            return;
+        }
+        let to = to.min(self.tabs.len() - 1);
+        let tab = self.tabs.remove(from);
+        // After removal, the target index needs adjusting if it was past `from`.
+        let insert_at = if from < to { to } else { to };
+        let insert_at = insert_at.min(self.tabs.len());
+        self.tabs.insert(insert_at, tab);
+
+        // Reindex active_tab + pane2_active so they keep pointing at the
+        // tabs that were under them.
+        self.active_tab = remap_index(self.active_tab, from, insert_at);
+        if let Some(p2) = self.pane2_active {
+            self.pane2_active = Some(remap_index(p2, from, insert_at));
+        }
+        // Rebuild MRU so closing & switching still works correctly.
+        let mut new_mru: Vec<usize> = Vec::with_capacity(self.tab_mru.len());
+        for old in self.tab_mru.order.iter() {
+            new_mru.push(remap_index(*old, from, insert_at));
+        }
+        self.tab_mru.order = new_mru;
+        self.saver.mark_dirty();
+    }
+
     fn close_others(&mut self, keep_idx: usize) {
         if keep_idx >= self.tabs.len() {
             return;
@@ -1013,8 +1039,22 @@ impl IdeUltraApp {
             CommandId::Save => self.save_active(),
             CommandId::CloseTab => self.request_close_tab(self.active_tab),
             CommandId::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            CommandId::Find => self.find.open_find(),
-            CommandId::FindReplace => self.find.open_replace(),
+            CommandId::Find => {
+                // Auto-scope to selection if it spans multiple lines.
+                if let Some(scope) = self.editor_multiline_selection(ctx) {
+                    self.find.open_in_selection(scope);
+                } else {
+                    self.find.open_find();
+                }
+            }
+            CommandId::FindReplace => {
+                if let Some(scope) = self.editor_multiline_selection(ctx) {
+                    self.find.open_in_selection(scope);
+                    self.find.show_replace = true;
+                } else {
+                    self.find.open_replace();
+                }
+            }
             CommandId::SearchInProject => self.open_project_search(),
             CommandId::GoToFile => self.open_finder(),
             CommandId::GoToLine => {
@@ -1614,6 +1654,34 @@ impl IdeUltraApp {
         self.project_search.dirty = false;
     }
 
+    /// If the active editor has a selection that spans more than one
+    /// line, return its **byte** range so the find bar can scope its
+    /// search to that slice.
+    fn editor_multiline_selection(&self, ctx: &Context) -> Option<(usize, usize)> {
+        let tab = self.tabs.get(self.active_tab)?;
+        let editor_id = egui::Id::new(("ide_editor", tab.path.as_path()));
+        let state =
+            egui::widgets::text_edit::TextEditState::load(ctx, editor_id)?;
+        let range = state.cursor.char_range()?;
+        let (a, b) = if range.primary.index <= range.secondary.index {
+            (range.primary.index, range.secondary.index)
+        } else {
+            (range.secondary.index, range.primary.index)
+        };
+        if a == b {
+            return None;
+        }
+        let text = &tab.buffer.text;
+        let selection: String = text.chars().skip(a).take(b - a).collect();
+        if !selection.contains('\n') {
+            return None;
+        }
+        // Convert char indices → byte indices for the find scope.
+        let start_byte = char_index_to_byte(text, a);
+        let end_byte = char_index_to_byte(text, b);
+        Some((start_byte, end_byte))
+    }
+
     fn create_and_open(&mut self, path: &Path) {
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() && !parent.exists() {
@@ -1750,6 +1818,35 @@ fn display_recent(path: &Path) -> String {
         }
     }
     path.display().to_string()
+}
+
+/// Compute the new index of a tab after a `remove(from) + insert(to)` move.
+/// The tab that *was* at `from` is now at `to`; everything else shifts by
+/// at most one to fill the gap left by the removal.
+fn remap_index(idx: usize, from: usize, to: usize) -> usize {
+    if idx == from {
+        return to;
+    }
+    let after_remove = if idx > from { idx - 1 } else { idx };
+    if after_remove >= to {
+        after_remove + 1
+    } else {
+        after_remove
+    }
+}
+
+fn char_index_to_byte(text: &str, char_index: usize) -> usize {
+    if char_index == 0 {
+        return 0;
+    }
+    let mut count = 0usize;
+    for (i, _) in text.char_indices() {
+        if count == char_index {
+            return i;
+        }
+        count += 1;
+    }
+    text.len()
 }
 
 fn crosses_newline(text: &str, selection: (usize, usize)) -> bool {
@@ -2242,6 +2339,7 @@ impl eframe::App for IdeUltraApp {
                             self.copy_to_clipboard(ctx, s);
                         }
                         TabAction::RevealInFinder(p) => self.reveal_in_finder(&p),
+                        TabAction::Reorder { from, to } => self.reorder_tab(from, to),
                         TabAction::None => {}
                     }
                 }
@@ -2261,6 +2359,7 @@ impl eframe::App for IdeUltraApp {
                         self.copy_to_clipboard(ctx, s);
                     }
                     TabAction::RevealInFinder(p) => self.reveal_in_finder(&p),
+                    TabAction::Reorder { from, to } => self.reorder_tab(from, to),
                     TabAction::None => {}
                 }
             }
@@ -2763,6 +2862,53 @@ impl eframe::App for IdeUltraApp {
         let session = self.current_session();
         if let Err(err) = self.saver.save_now(&settings, &session) {
             tracing::warn!(error = %err, "save_now failed");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tab_reorder_tests {
+    use super::remap_index;
+
+    // Helper that runs `remap_index` for every position in a fake tab
+    // list so we can assert on the whole resulting order.
+    fn apply(len: usize, from: usize, to: usize) -> Vec<usize> {
+        let mut v: Vec<usize> = (0..len).collect();
+        let tab = v.remove(from);
+        let target = to.min(v.len());
+        v.insert(target, tab);
+        v
+    }
+
+    #[test]
+    fn move_forward_shifts_intermediate_left() {
+        // 0 1 2 3 4, move 1 → 3 ⇒ 0 2 3 1 4
+        let after = apply(5, 1, 3);
+        assert_eq!(after, vec![0, 2, 3, 1, 4]);
+        // Indices after the operation:
+        assert_eq!(remap_index(0, 1, 3), 0);
+        assert_eq!(remap_index(1, 1, 3), 3); // the moved one
+        assert_eq!(remap_index(2, 1, 3), 1); // shifted left
+        assert_eq!(remap_index(3, 1, 3), 2); // shifted left
+        assert_eq!(remap_index(4, 1, 3), 4);
+    }
+
+    #[test]
+    fn move_backward_shifts_intermediate_right() {
+        // 0 1 2 3 4, move 3 → 1 ⇒ 0 3 1 2 4
+        let after = apply(5, 3, 1);
+        assert_eq!(after, vec![0, 3, 1, 2, 4]);
+        assert_eq!(remap_index(0, 3, 1), 0);
+        assert_eq!(remap_index(1, 3, 1), 2); // shifted right
+        assert_eq!(remap_index(2, 3, 1), 3); // shifted right
+        assert_eq!(remap_index(3, 3, 1), 1); // the moved one
+        assert_eq!(remap_index(4, 3, 1), 4);
+    }
+
+    #[test]
+    fn move_to_self_is_identity() {
+        for i in 0..5 {
+            assert_eq!(remap_index(i, 2, 2), if i == 2 { 2 } else if i > 2 { i - 1 + 1 } else { i });
         }
     }
 }
