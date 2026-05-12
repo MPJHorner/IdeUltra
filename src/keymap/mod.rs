@@ -97,6 +97,7 @@ fn build_bindings(preset: KeymapPreset) -> Vec<(CommandId, KeyboardShortcut)> {
         (CommandId::ToggleMarkdownPreview, KeyboardShortcut::new(cmd_alt, Key::M)),
         (CommandId::ToggleLineComment, KeyboardShortcut::new(cmd, Key::Slash)),
         (CommandId::OpenPreferences, KeyboardShortcut::new(cmd, Key::Comma)),
+        (CommandId::ToggleSplit, KeyboardShortcut::new(cmd, Key::Backslash)),
     ];
 
     match preset {

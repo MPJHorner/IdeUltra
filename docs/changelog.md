@@ -3,6 +3,15 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.11.0 — 2026-05-12
+
+- **Split editor pane (⌘\).** A second editor pane opens beside the first,
+  each with its own active tab. Click a tab in either pane's strip to
+  both focus that pane *and* activate the clicked file. The focused pane
+  drives the sidebar, find bar, status bar, and command palette; the
+  other pane sits beside it with an independent caret and scroll. Toggle
+  again to collapse — the currently focused pane stays, the other closes.
+
 ## v0.10.0 — 2026-05-12
 
 - **Trim trailing whitespace on save** and **ensure final newline on save**

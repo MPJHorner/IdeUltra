@@ -38,6 +38,7 @@ pub enum CommandId {
     KeymapPhpStorm,
     ToggleLineComment,
     OpenPreferences,
+    ToggleSplit,
 }
 
 #[derive(Debug, Clone)]
@@ -195,6 +196,11 @@ pub fn all_commands() -> &'static [CommandEntry] {
             id: CommandId::OpenPreferences,
             label: "Settings: Open Preferences…",
             keys: "⌘,",
+        },
+        CommandEntry {
+            id: CommandId::ToggleSplit,
+            label: "View: Toggle Split Editor",
+            keys: "⌘\\",
         },
     ]
 }

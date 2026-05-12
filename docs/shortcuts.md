@@ -58,3 +58,4 @@ The full keymap for v0.1.0.
 | <code>⌘-</code> | Zoom out |
 | <code>⌘0</code> | Reset zoom |
 | <code>⌥⌘M</code> | Toggle markdown preview |
+| <code>⌘\\</code> | Toggle split editor |

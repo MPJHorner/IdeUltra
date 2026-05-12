@@ -96,6 +96,12 @@ pub struct IdeUltraApp {
     tab_mru: TabMru,
     quick_switcher: QuickSwitcherState,
     preferences_open: bool,
+    /// Active tab of the *non-focused* pane when the editor is split.
+    /// `None` ⇒ no split; a single pane renders.
+    pane2_active: Option<usize>,
+    /// Which pane is currently focused. Only meaningful when `pane2_active`
+    /// is `Some`. `active_tab` always refers to the focused pane's tab.
+    focused_right: bool,
 }
 
 impl IdeUltraApp {
@@ -147,6 +153,8 @@ impl IdeUltraApp {
             tab_mru: TabMru::default(),
             quick_switcher: QuickSwitcherState::default(),
             preferences_open: false,
+            pane2_active: None,
+            focused_right: false,
         };
         // Seed the MRU from the restored tabs so Ctrl+Tab works on first
         // launch. Order: active tab first, then the others in tab order.
@@ -205,6 +213,64 @@ impl IdeUltraApp {
             ensure_final_newline_on_save: self.ensure_final_newline_on_save,
             indent_style: self.indent_style,
             soft_wrap: self.soft_wrap,
+        }
+    }
+
+    fn toggle_split(&mut self) {
+        if self.tabs.is_empty() {
+            self.flash("Open a file first");
+            return;
+        }
+        if self.pane2_active.is_some() {
+            // Collapse: keep whichever pane is currently focused; close the other.
+            self.pane2_active = None;
+            self.focused_right = false;
+        } else {
+            // Open split: secondary pane starts on the same tab so the user
+            // can move it elsewhere without losing their place.
+            self.pane2_active = Some(self.active_tab);
+        }
+    }
+
+    /// Click / activate in pane `right`. If that's the non-focused pane,
+    /// swap the active tabs so `self.active_tab` still names the focused
+    /// pane's active buffer.
+    fn focus_pane(&mut self, want_right: bool, new_active: usize) {
+        let split = self.pane2_active.is_some();
+        if !split {
+            self.active_tab = new_active;
+            return;
+        }
+        let currently_right = self.focused_right;
+        if want_right == currently_right {
+            // Same pane — just update its active tab.
+            self.active_tab = new_active;
+        } else {
+            // Switching pane: the OLD active_tab becomes pane2_active.
+            let prev_active = self.active_tab;
+            self.active_tab = new_active;
+            self.pane2_active = Some(prev_active);
+            self.focused_right = want_right;
+        }
+    }
+
+    /// When a tab is removed globally, clamp `pane2_active` so it never
+    /// points past the end. If we'd land on the same slot as `active_tab`
+    /// after clamping, the split collapses.
+    fn fix_pane2_after_removal(&mut self) {
+        let Some(p2) = self.pane2_active else { return };
+        if self.tabs.is_empty() {
+            self.pane2_active = None;
+            self.focused_right = false;
+            return;
+        }
+        let clamped = p2.min(self.tabs.len() - 1);
+        if clamped == self.active_tab {
+            // Both panes would land on the same tab — collapse the split.
+            self.pane2_active = None;
+            self.focused_right = false;
+        } else {
+            self.pane2_active = Some(clamped);
         }
     }
 
@@ -584,6 +650,17 @@ impl IdeUltraApp {
         } else if self.tabs.is_empty() {
             self.active_tab = 0;
         }
+        // Rebase pane2_active too, then collapse if it now coincides.
+        if let Some(p2) = self.pane2_active {
+            if p2 == idx {
+                // The removed tab WAS the secondary pane's active — collapse.
+                self.pane2_active = None;
+                self.focused_right = false;
+            } else if p2 > idx {
+                self.pane2_active = Some(p2 - 1);
+            }
+        }
+        self.fix_pane2_after_removal();
         if !self.tabs.is_empty() {
             self.tab_mru.touch(self.active_tab);
         }
@@ -954,6 +1031,7 @@ impl IdeUltraApp {
             CommandId::KeymapPhpStorm => self.switch_keymap(KeymapPreset::PhpStorm),
             CommandId::ToggleLineComment => self.toggle_line_comment(ctx),
             CommandId::OpenPreferences => self.preferences_open = !self.preferences_open,
+            CommandId::ToggleSplit => self.toggle_split(),
         }
     }
 
@@ -1341,6 +1419,10 @@ impl eframe::App for IdeUltraApp {
                         self.markdown_preview = !self.markdown_preview;
                         self.saver.mark_dirty();
                     }
+                    if ui.button("Toggle Split Editor  ⌘\\").clicked() {
+                        ui.close_menu();
+                        self.toggle_split();
+                    }
                     ui.separator();
                     if ui.button("Zoom In  ⌘=").clicked() {
                         self.zoom = (self.zoom + 0.1).clamp(0.5, 3.0);
@@ -1519,23 +1601,57 @@ impl eframe::App for IdeUltraApp {
                 return;
             }
 
-            // Tabs
-            let tab_action = tabs::show(ui, &self.tabs, self.active_tab);
-            ui.separator();
-            match tab_action {
-                TabAction::Activate(i) => {
-                    self.active_tab = i;
-                    self.saver.mark_dirty();
+            // Tabs strip. When split, render TWO strips side-by-side so
+            // each pane can have its own active tab. Clicking in either
+            // strip both focuses that pane AND activates the clicked tab.
+            if let Some(p2) = self.pane2_active {
+                let (left_idx, right_idx) = if self.focused_right {
+                    (p2, self.active_tab)
+                } else {
+                    (self.active_tab, p2)
+                };
+                let mut acts: [TabAction; 2] = [TabAction::None, TabAction::None];
+                ui.columns(2, |cols| {
+                    acts[0] = tabs::show(&mut cols[0], &self.tabs, left_idx);
+                    acts[1] = tabs::show(&mut cols[1], &self.tabs, right_idx);
+                });
+                ui.separator();
+                for (col_i, act) in acts.into_iter().enumerate() {
+                    let want_right = col_i == 1;
+                    match act {
+                        TabAction::Activate(i) => {
+                            self.focus_pane(want_right, i);
+                            self.saver.mark_dirty();
+                        }
+                        TabAction::Close(i) => self.request_close_tab(i),
+                        TabAction::CloseOthers(i) => self.close_others(i),
+                        TabAction::CloseAll => self.close_all_tabs(),
+                        TabAction::CopyPath(p) => {
+                            let s = p.display().to_string();
+                            self.copy_to_clipboard(ctx, s);
+                        }
+                        TabAction::RevealInFinder(p) => self.reveal_in_finder(&p),
+                        TabAction::None => {}
+                    }
                 }
-                TabAction::Close(i) => self.request_close_tab(i),
-                TabAction::CloseOthers(i) => self.close_others(i),
-                TabAction::CloseAll => self.close_all_tabs(),
-                TabAction::CopyPath(p) => {
-                    let s = p.display().to_string();
-                    self.copy_to_clipboard(ctx, s);
+            } else {
+                let tab_action = tabs::show(ui, &self.tabs, self.active_tab);
+                ui.separator();
+                match tab_action {
+                    TabAction::Activate(i) => {
+                        self.focus_pane(false, i);
+                        self.saver.mark_dirty();
+                    }
+                    TabAction::Close(i) => self.request_close_tab(i),
+                    TabAction::CloseOthers(i) => self.close_others(i),
+                    TabAction::CloseAll => self.close_all_tabs(),
+                    TabAction::CopyPath(p) => {
+                        let s = p.display().to_string();
+                        self.copy_to_clipboard(ctx, s);
+                    }
+                    TabAction::RevealInFinder(p) => self.reveal_in_finder(&p),
+                    TabAction::None => {}
                 }
-                TabAction::RevealInFinder(p) => self.reveal_in_finder(&p),
-                TabAction::None => {}
             }
 
             // Find bar
@@ -1626,7 +1742,7 @@ impl eframe::App for IdeUltraApp {
                     });
             }
 
-            // Editor
+            // Editor (one pane normally, two side-by-side when split).
             let jump: Option<Jump> = if let Some(r) = project_jump_pending {
                 Some(Jump::ByteRange(r))
             } else if self.find.scroll_pending {
@@ -1641,11 +1757,83 @@ impl eframe::App for IdeUltraApp {
             } else {
                 None
             };
-            if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                let res = editor_panel::show(ui, tab, theme, jump, self_soft_wrap);
-                self.caret_line_col = res
-                    .caret_char_index
-                    .map(|ci| line_col_at_char(&tab.buffer.text, ci));
+
+            if let Some(p2) = self.pane2_active {
+                let active = self.active_tab;
+                // Which side renders which pane depends on focused_right.
+                let (left_idx, right_idx) = if self.focused_right {
+                    (p2, active)
+                } else {
+                    (active, p2)
+                };
+                // Apply `jump` only to the FOCUSED pane.
+                let (left_jump, right_jump) = if self.focused_right {
+                    (None, jump)
+                } else {
+                    (jump, None)
+                };
+                let theme_l = theme;
+                let theme_r = theme;
+                let wrap = self_soft_wrap;
+                let focused_right = self.focused_right;
+
+                let mut clicked_left = false;
+                let mut clicked_right = false;
+                let mut left_caret: Option<usize> = None;
+                let mut right_caret: Option<usize> = None;
+
+                ui.columns(2, |cols| {
+                    // Left pane
+                    let ui_l = &mut cols[0];
+                    let resp_l = ui_l.label(
+                        egui::RichText::new(if focused_right { "" } else { "▎ focused" })
+                            .small()
+                            .weak(),
+                    );
+                    if resp_l.clicked() {
+                        clicked_left = true;
+                    }
+                    if let Some(tab) = self.tabs.get_mut(left_idx) {
+                        let res = editor_panel::show(ui_l, tab, theme_l, left_jump, wrap);
+                        left_caret = res.caret_char_index;
+                    }
+
+                    // Right pane
+                    let ui_r = &mut cols[1];
+                    let resp_r = ui_r.label(
+                        egui::RichText::new(if focused_right { "▎ focused" } else { "" })
+                            .small()
+                            .weak(),
+                    );
+                    if resp_r.clicked() {
+                        clicked_right = true;
+                    }
+                    if let Some(tab) = self.tabs.get_mut(right_idx) {
+                        let res = editor_panel::show(ui_r, tab, theme_r, right_jump, wrap);
+                        right_caret = res.caret_char_index;
+                    }
+                });
+
+                if clicked_left && self.focused_right {
+                    self.focus_pane(false, left_idx);
+                }
+                if clicked_right && !self.focused_right {
+                    self.focus_pane(true, right_idx);
+                }
+                // Caret position for the status bar comes from the focused pane.
+                let focused_caret = if self.focused_right { right_caret } else { left_caret };
+                let focused_idx = self.active_tab;
+                if let Some(tab) = self.tabs.get(focused_idx) {
+                    self.caret_line_col =
+                        focused_caret.map(|ci| line_col_at_char(&tab.buffer.text, ci));
+                }
+            } else {
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    let res = editor_panel::show(ui, tab, theme, jump, self_soft_wrap);
+                    self.caret_line_col = res
+                        .caret_char_index
+                        .map(|ci| line_col_at_char(&tab.buffer.text, ci));
+                }
             }
         });
 
