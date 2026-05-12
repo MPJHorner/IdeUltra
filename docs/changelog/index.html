@@ -51,6 +51,21 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.23.1</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>One-line installer.</strong> The README and the install
+          page now lead with
+          <code>curl -fsSL https://raw.githubusercontent.com/MPJHorner/IdeUltra/main/scripts/install.sh | bash</code>.
+          The script downloads the latest universal DMG, copies the app to
+          <code>/Applications</code>, and clears the Gatekeeper quarantine
+          flag — no manual <code>xattr</code> dance needed.</li>
+        <li><strong>CI fix.</strong> The unused-import errors that were
+          tripping <code>RUSTFLAGS=-D warnings</code> on macOS + Ubuntu
+          CI are gone.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.23.0</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>Luxury light is the new default theme.</strong> White

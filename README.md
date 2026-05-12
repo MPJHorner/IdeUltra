@@ -1,53 +1,35 @@
 # IdeUltra
 
-A snappy, native, local-first code IDE. Part of the **Ultra** family — alongside [MailboxUltra](https://mpjhorner.github.io/MailboxUltra/) and [PostbinUltra](https://mpjhorner.github.io/PostbinUltra/).
+A snappy, native, local-first code IDE. **2026 luxury light** — white
+canvas, deep-ink accent, generous whitespace. Pure Rust + [egui](https://github.com/emilk/egui).
 
-- Pure Rust + [egui](https://github.com/emilk/egui)
-- Native macOS, single binary (~15 MB)
-- Zero telemetry, MIT licensed
-- Built for **speed** — startup under 150ms, keystroke-to-paint under 16ms
+Part of the **Ultra** family — alongside
+[MailboxUltra](https://mpjhorner.github.io/MailboxUltra/) and
+[PostbinUltra](https://mpjhorner.github.io/PostbinUltra/).
 
-> **Status:** v0.1.0 — feature-complete MVP. All ten deliverables shipped. Docs at <https://mpjhorner.github.io/IdeUltra/>. See [`plan.md`](./plan.md) for the deliverable-ordered build log.
+- Native macOS · universal binary (~16 MB)
+- 239 unit tests, all green
+- Zero telemetry · MIT licensed
+- Cold start < 150 ms · keystroke-to-paint < 16 ms
 
-## Shortcuts
-
-| Key | Action |
-|-|-|
-| `⌘O` | Open File… |
-| `⇧⌘O` | Open Folder… |
-| `⌘S` | Save active tab |
-| `⌘W` | Close active tab |
-| `⌘[` / `⌘]` | Previous / next tab |
-| `⌘1`…`⌘9` | Jump to tab N |
-| `⌘F` | Find |
-| `⌥⌘F` | Find & Replace |
-| `⇧⌘F` | Search in project |
-| `Enter` / `⇧Enter` | Next / previous match |
-| `Esc` | Close find bar |
-| `⌘P` | Go to file (fuzzy finder) |
-| `⇧⌘P` | Command palette |
-| `⌘G` | Go to line |
-| `⌘B` | Toggle sidebar |
-| `⌘=` / `⌘-` / `⌘0` | Zoom in / out / reset |
-| `⌥⌘M` | Toggle markdown preview |
-
-## Tests
+## Install
 
 ```bash
-cargo test
+curl -fsSL https://raw.githubusercontent.com/MPJHorner/IdeUltra/main/scripts/install.sh | bash
 ```
 
-122 unit tests covering find/replace logic, buffer dirty tracking, language detection, file-tree behaviour, line/column conversion, line-ending detection, settings/session persistence, fuzzy file finder scoring + indexing, project-wide search, the command palette registry, crash recovery, markdown parsing, line-diff, recent-files MRU, text transformations, and git porcelain parsing (untracked, modified, added, deleted, rename, unmerged conflict, paths-with-spaces, multi-record).
+That fetches the latest universal `.dmg` from GitHub, copies
+`IdeUltra.app` into `/Applications`, and clears the Gatekeeper
+quarantine flag. macOS 11+, Apple Silicon or Intel.
 
-## State files
+Prefer to do it by hand? Grab the latest DMG from the
+[releases page](https://github.com/MPJHorner/IdeUltra/releases/latest)
+and drag the app into `/Applications`. First launch will be blocked
+by Gatekeeper (the binary isn't notarised yet); run:
 
-IdeUltra writes two human-readable JSON files to
-`~/Library/Application Support/com.mpjhorner.IdeUltra/`:
-
-- `settings.json` — theme, zoom, sidebar state
-- `session.json` — window size/position, last folder, open tabs, active tab
-
-Edit them by hand and they'll be picked up on next launch.
+```bash
+xattr -d com.apple.quarantine /Applications/IdeUltra.app
+```
 
 ## Run from source
 
@@ -57,54 +39,73 @@ cd IdeUltra
 cargo run --release
 ```
 
-## Build a .app and .dmg
+Rust 1.78+ required. First build ~30 s; incremental builds are
+sub-second.
+
+## Build a `.app` and `.dmg`
 
 ```bash
-./scripts/package.sh 0.1.0
-# → dist/IdeUltra.app
-# → dist/IdeUltra-0.1.0.dmg
+./scripts/package.sh 0.23.1
+# → dist/IdeUltra.app          (universal arm64 + x86_64)
+# → dist/IdeUltra-0.23.1.dmg
 ```
 
-arm64 only for v0.1.0; universal binary (Intel + arm64) is planned for v0.1.1.
+Set `IDEULTRA_ARCH=arm64` for a slim, single-arch build.
 
-## Roadmap
+## Shortcuts
 
-The MVP ships in 10 deliverables (D1–D10). Tracked in [`plan.md`](./plan.md).
+| Key                       | Action                                       |
+|---------------------------|----------------------------------------------|
+| `⌘N`                      | New file (Untitled)                          |
+| `⌘O` / `⇧⌘O`              | Open file / Open folder                      |
+| `⌘S` / `⇧⌘S`              | Save / Save As                               |
+| `⌘W`                      | Close tab (prompts on dirty)                 |
+| `⌘[` / `⌘]`               | Previous / next tab                          |
+| `⌃Tab`                    | Quick-switch most-recently-used tabs         |
+| `⌘1` … `⌘9`               | Jump to tab N                                |
+| `⌘P` / `⇧⌘P`              | Go to file / Command palette                 |
+| `⌘D`                      | Select word at cursor / next occurrence      |
+| `⌘F` / `⌥⌘F` / `⇧⌘F`      | Find / Find & Replace / Find in project      |
+| `⌘/`                      | Toggle line comment                          |
+| `Tab` / `⇧Tab`            | Indent / dedent selection                    |
+| `⌘G` / `⌘B` / `⌘\`        | Go to line / Toggle sidebar / Split editor   |
+| `⌥⌘M` / `⌘,`              | Toggle markdown preview / Preferences        |
+| `⌘=` / `⌘-` / `⌘0`        | Zoom in / out / reset                        |
 
-| | Deliverable | Status |
-|-|-|-|
-| D1  | Scaffold + empty native window | shipped |
-| D2  | File browser sidebar | shipped |
-| D3  | Editor core (open / edit / save) | shipped |
-| D4  | Tabs | shipped |
-| D5  | Syntax highlighting | shipped |
-| D6  | Find & replace | shipped |
-| D7  | Status bar & shortcuts | shipped |
-| D8  | Persistence | shipped |
-| D9  | File watching | shipped |
-| D10 | Packaging + docs site | shipped |
+Default preset; pick **VS Code** or **PhpStorm** from
+`Edit → Keymap` for the other conventions.
 
-**MVP complete.** Tagged `v0.1.0`. Docs live at <https://mpjhorner.github.io/IdeUltra/>.
+## Tests
 
-### v0.2 (in progress)
+```bash
+cargo test
+```
 
-| | Feature | Status |
-|-|-|-|
-| 1 | Fuzzy file finder (⌘P) | shipped on `main` |
-| 2 | Project-wide search (⇧⌘F) | shipped on `main` |
-| 3 | Command palette (⇧⌘P) | shipped on `main` |
-| 4 | Crash recovery for dirty buffers | shipped on `main` |
-| 5 | Markdown preview (⌥⌘M) | shipped on `main` |
-| 6 | Diff view for external changes | shipped on `main` |
-| 7 | Recent files + Open Recent menu | shipped on `main` |
+239 unit tests across find/replace, buffer state, language detection,
+file-tree behaviour, fuzzy search scoring, project-wide search,
+command palette registry, crash recovery, markdown parsing, line-diff,
+recent-files MRU, text transforms, git porcelain parsing, brackets,
+auto-pair, line/col conversion, line-ending detection, settings/session
+persistence, name validation, indent / dedent, version compare for the
+updater, and select-next-occurrence.
 
-### v0.4 (in progress)
+## Design
 
-| | Feature | Status |
-|-|-|-|
-| 1 | Auto-save on focus loss | shipped on `main` |
-| 2 | Selection transforms (sort / unique / case) | shipped on `main` |
-| 3 | Git status decorations in sidebar | shipped on `main` |
+See [`STYLE_GUIDE.md`](./STYLE_GUIDE.md) — distilled from Zed, Linear,
+Vercel Geist, Stripe docs, JetBrains Fleet, shadcn/ui. The aesthetic is
+"luxury light": white paper, deep-ink accent, almost-invisible chrome.
+Code carries the colour; chrome stays out of the way.
+
+## State files
+
+`~/Library/Application Support/com.mpjhorner.IdeUltra/`:
+
+- `settings.json` — theme, zoom, keymap, soft-wrap, autosave toggles
+- `session.json` — window, open tabs, split state, recent files & folders
+- `recovery/<hash>.{json,txt}` — crash-recovery snapshots, surfaced on next launch
+- `log.ndjson` — structured tracing output
+
+All human-readable, all atomic writes.
 
 ## License
 

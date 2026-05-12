@@ -70,12 +70,12 @@
 <main class="page home-page">
   <article class="prose">
     <section class="hero">
-      <span class="hero-eyebrow"><span class="badge">v0.23.0</span> Native macOS · pure Rust + egui · universal binary</span>
+      <span class="hero-eyebrow"><span class="badge">v0.23.1</span> Native macOS · pure Rust + egui · universal binary</span>
       <h1>A code IDE that's actually <span class="accent">snappy</span>.</h1>
       <p class="lede">IdeUltra is a native macOS code editor that opens in under 150&nbsp;ms and paints every keystroke in under 16&nbsp;ms. Pure Rust on top of egui — no Electron, no webview, no language server doing first-run indexing on a 50,000-file repo. Open a folder, edit, save. That's the whole loop.</p>
 
       <div class="hero-actions">
-        <a class="btn primary" href="/IdeUltra/install/">Download for macOS</a>
+        <a class="btn primary" href="/IdeUltra/install/">Install in 30 seconds</a>
         <a class="btn ghost" href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.51-1.08-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.21-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.92.08 2.13.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
           View on GitHub
@@ -83,12 +83,12 @@
       </div>
 
       <div class="hero-oneliner">
-        <code>git clone https://github.com/MPJHorner/IdeUltra &amp;&amp; cd IdeUltra &amp;&amp; cargo run --release</code>
+        <code>curl -fsSL https://raw.githubusercontent.com/MPJHorner/IdeUltra/main/scripts/install.sh | bash</code>
       </div>
 
       <div class="hero-meta">
         <span><strong>macOS 11+</strong> · universal arm64 + x86_64</span>
-        <span><strong>7.6 MB</strong> binary, 9.8 MB DMG</span>
+        <span><strong>16 MB</strong> binary, 9.9 MB DMG</span>
         <span><strong>MIT</strong> licensed</span>
         <span><strong>0 telemetry</strong> · runs offline</span>
       </div>
@@ -209,12 +209,10 @@ $ xattr -d com.apple.quarantine /Applications/IdeUltra.app</pre>
       <div class="code-block">
         <span class="code-lang">sh</span>
         <button class="copy-btn" type="button" aria-label="Copy code">copy</button>
-        <pre><code class="language-sh">git clone https://github.com/MPJHorner/IdeUltra
-cd IdeUltra
-cargo run --release</code></pre>
+        <pre><code class="language-sh">curl -fsSL https://raw.githubusercontent.com/MPJHorner/IdeUltra/main/scripts/install.sh | bash</code></pre>
       </div>
 
-      <p>Or grab the pre-built universal <code>.dmg</code> from the <a href="https://github.com/MPJHorner/IdeUltra/releases/latest" rel="noopener noreferrer">latest release</a>. The first launch is blocked by Gatekeeper because the binary isn't notarised yet — <a href="/IdeUltra/install/">full install guide</a> covers the one-line <code>xattr</code> workaround and a manual build-from-source path.</p>
+      <p>One line. The script fetches the latest universal <code>.dmg</code> from GitHub, copies <code>IdeUltra.app</code> to <code>/Applications</code>, and clears the Gatekeeper quarantine flag. macOS 11+, Apple Silicon or Intel. Want to do it by hand? Grab the <a href="https://github.com/MPJHorner/IdeUltra/releases/latest" rel="noopener noreferrer">latest release</a> and drop the app in <code>/Applications</code> — <a href="/IdeUltra/install/">full install guide</a> has all the alternatives.</p>
 
       <div class="cta-card">
         <div>
