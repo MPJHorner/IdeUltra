@@ -125,6 +125,10 @@ pub struct SessionState {
     pub active_tab: usize,
     #[serde(default)]
     pub recent_files: RecentFiles,
+    #[serde(default)]
+    pub pane2_active: Option<usize>,
+    #[serde(default)]
+    pub focused_right: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -310,6 +314,8 @@ mod tests {
             open_tabs: vec![PathBuf::from("a.rs"), PathBuf::from("b.rs")],
             active_tab: 1,
             recent_files: Default::default(),
+            pane2_active: None,
+            focused_right: false,
         };
         let bytes = serde_json::to_vec(&sess).unwrap();
         let parsed: SessionState = serde_json::from_slice(&bytes).unwrap();
@@ -332,6 +338,8 @@ mod tests {
             open_tabs: vec![real.clone(), fake],
             active_tab: 1, // points at the fake one
             recent_files: Default::default(),
+            pane2_active: None,
+            focused_right: false,
         };
         let filtered = super::filter_missing_tabs(sess);
         assert_eq!(filtered.open_tabs, vec![real]);

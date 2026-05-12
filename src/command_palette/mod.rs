@@ -39,6 +39,7 @@ pub enum CommandId {
     ToggleLineComment,
     OpenPreferences,
     ToggleSplit,
+    SelectNextOccurrence,
 }
 
 #[derive(Debug, Clone)]
@@ -201,6 +202,11 @@ pub fn all_commands() -> &'static [CommandEntry] {
             id: CommandId::ToggleSplit,
             label: "View: Toggle Split Editor",
             keys: "⌘\\",
+        },
+        CommandEntry {
+            id: CommandId::SelectNextOccurrence,
+            label: "Edit: Select Next Occurrence",
+            keys: "⌘D",
         },
     ]
 }

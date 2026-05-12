@@ -20,6 +20,7 @@ mod persistence;
 mod project_search;
 mod recent;
 mod recovery;
+mod select_next;
 mod style;
 mod transforms;
 mod ui;

@@ -27,6 +27,7 @@ The full keymap for v0.1.0.
 | Shortcut | Action |
 |-|-|
 | <code>⌘/</code> | Toggle line comment |
+| <code>⌘D</code> | Select word at cursor / next occurrence |
 
 ## Find &amp; replace
 

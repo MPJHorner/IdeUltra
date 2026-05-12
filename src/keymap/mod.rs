@@ -98,6 +98,7 @@ fn build_bindings(preset: KeymapPreset) -> Vec<(CommandId, KeyboardShortcut)> {
         (CommandId::ToggleLineComment, KeyboardShortcut::new(cmd, Key::Slash)),
         (CommandId::OpenPreferences, KeyboardShortcut::new(cmd, Key::Comma)),
         (CommandId::ToggleSplit, KeyboardShortcut::new(cmd, Key::Backslash)),
+        (CommandId::SelectNextOccurrence, KeyboardShortcut::new(cmd, Key::D)),
     ];
 
     match preset {

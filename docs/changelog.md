@@ -3,6 +3,15 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.13.0 — 2026-05-12
+
+- **Select next occurrence (⌘D).** Press ⌘D with no selection to pick the
+  word under the cursor; press it again (with the selection still active)
+  to jump to the next occurrence. Wraps around at the end of the file.
+  Identifier-aware: `_` and Unicode letters count as word characters.
+- **Split state persists** across launches — if you quit with two panes
+  open, you come back to two panes.
+
 ## v0.12.0 — 2026-05-12
 
 - **Replace in project.** The project-search panel grows a Replace toggle:

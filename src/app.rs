@@ -156,8 +156,8 @@ impl IdeUltraApp {
             tab_mru: TabMru::default(),
             quick_switcher: QuickSwitcherState::default(),
             preferences_open: false,
-            pane2_active: None,
-            focused_right: false,
+            pane2_active: loaded.session.pane2_active,
+            focused_right: loaded.session.focused_right,
             replace_confirm_open: false,
         };
         // Seed the MRU from the restored tabs so Ctrl+Tab works on first
@@ -355,6 +355,8 @@ impl IdeUltraApp {
             open_tabs: self.tabs.iter().map(|t| t.path.clone()).collect(),
             active_tab: self.active_tab,
             recent_files: self.recent_files.clone(),
+            pane2_active: self.pane2_active,
+            focused_right: self.focused_right,
         }
     }
 
@@ -1036,7 +1038,60 @@ impl IdeUltraApp {
             CommandId::ToggleLineComment => self.toggle_line_comment(ctx),
             CommandId::OpenPreferences => self.preferences_open = !self.preferences_open,
             CommandId::ToggleSplit => self.toggle_split(),
+            CommandId::SelectNextOccurrence => self.select_next_occurrence(ctx),
         }
+    }
+
+    fn select_next_occurrence(&mut self, ctx: &Context) {
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            return;
+        };
+        let editor_id = egui::Id::new(("ide_editor", tab.path.as_path()));
+        let Some(mut state) =
+            egui::widgets::text_edit::TextEditState::load(ctx, editor_id)
+        else {
+            return;
+        };
+        let range = state.cursor.char_range();
+        let buf = &tab.buffer.text;
+        // Determine the needle: existing selection text, else the word at cursor.
+        let (needle, start_char) = match range {
+            Some(r) if r.primary.index != r.secondary.index => {
+                let (a, b) = if r.primary.index <= r.secondary.index {
+                    (r.primary.index, r.secondary.index)
+                } else {
+                    (r.secondary.index, r.primary.index)
+                };
+                let s: String = buf.chars().skip(a).take(b - a).collect();
+                (s, b)
+            }
+            _ => {
+                let caret = range
+                    .map(|r| r.primary.index)
+                    .unwrap_or(0);
+                let Some(w) = crate::select_next::word_at(buf, caret) else {
+                    self.flash("No word at cursor");
+                    return;
+                };
+                let word: String = buf.chars().skip(w.start).take(w.end - w.start).collect();
+                (word, w.start)
+            }
+        };
+        // Find next occurrence (case-sensitive by convention; Cmd+D on
+        // VS Code is case-sensitive too).
+        let Some(hit) = crate::select_next::find_next(buf, start_char, &needle, true) else {
+            self.flash("No more occurrences");
+            return;
+        };
+        // Select the match. Scroll-to-me happens because TextEdit moves
+        // the cursor on the next frame.
+        use egui::text::{CCursor, CCursorRange};
+        state.cursor.set_char_range(Some(CCursorRange::two(
+            CCursor::new(hit.start),
+            CCursor::new(hit.end),
+        )));
+        state.store(ctx, editor_id);
+        ctx.request_repaint();
     }
 
     fn apply_indent(&mut self, ctx: &Context, dedent: bool) {
