@@ -51,6 +51,19 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.23.2</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>Auto-release works end-to-end.</strong> The release
+          workflow was failing with HTTP 403 when the default
+          <code>GITHUB_TOKEN</code> tried to upload assets to the GitHub
+          release. Added <code>permissions: contents: write</code> at both
+          the workflow and job level. Future <code>v*</code> tag pushes
+          now build the universal DMG on GitHub Actions and attach it to
+          the release automatically — no manual step.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.23.1</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>One-line installer.</strong> The README and the install
