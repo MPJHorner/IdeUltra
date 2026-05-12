@@ -1,6 +1,9 @@
 use egui::{Color32, FontFamily, FontId, RichText, ScrollArea, Ui};
 
 use crate::diff::{DiffKind, DiffSummary};
+use crate::editor::language::ColorTheme;
+use crate::style::{radii, space, tokens, ts};
+use crate::ui::components::{ghost_button, hint_row, modal_frame, primary_button};
 
 pub enum DiffModalAction {
     None,
@@ -13,54 +16,61 @@ pub fn show(
     ctx: &egui::Context,
     file_name: &str,
     summary: &DiffSummary,
+    theme: ColorTheme,
 ) -> DiffModalAction {
     let mut action = DiffModalAction::None;
     let mut close_clicked = false;
+    let t = tokens(theme);
 
     egui::Window::new(format!("Changes on disk — {file_name}"))
+        .title_bar(false)
         .collapsible(false)
         .resizable(true)
-        .default_width(720.0)
-        .default_height(480.0)
+        .default_width(760.0)
+        .default_height(500.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .frame(modal_frame(ctx, theme))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new(format!(
-                        "+{} added  ·  −{} removed  ·  {} unchanged",
-                        summary.added, summary.removed, summary.equal,
-                    ))
-                    .small()
-                    .weak(),
+                    RichText::new(format!("Changes on disk — {file_name}"))
+                        .color(t.text_primary)
+                        .size(ts::HEADING_SM)
+                        .strong(),
                 );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("✕").on_hover_text("Close").clicked() {
-                        close_clicked = true;
-                    }
-                });
             });
-            ui.separator();
+            ui.label(
+                RichText::new(format!(
+                    "+{} added  ·  −{} removed  ·  {} unchanged",
+                    summary.added, summary.removed, summary.equal,
+                ))
+                .color(t.text_muted)
+                .size(ts::LABEL_SM),
+            );
+            ui.add_space(space::S2);
 
             ScrollArea::vertical()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    render_lines(ui, summary);
+                    render_lines(ui, theme, summary);
                 });
 
+            ui.add_space(space::S2);
             ui.separator();
             ui.horizontal(|ui| {
-                if ui.button("Reload from disk").clicked() {
+                if primary_button(ui, theme, "Reload from disk").clicked() {
                     action = DiffModalAction::Reload;
                 }
-                if ui.button("Keep mine").clicked() {
+                if ghost_button(ui, theme, "Keep mine").clicked() {
                     action = DiffModalAction::KeepMine;
                 }
                 ui.with_layout(
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        if ui.button("Close").clicked() {
+                        if ghost_button(ui, theme, "Close").clicked() {
                             close_clicked = true;
                         }
+                        hint_row(ui, theme, &["esc close"]);
                     },
                 );
             });
@@ -72,55 +82,62 @@ pub fn show(
     action
 }
 
-fn render_lines(ui: &mut Ui, summary: &DiffSummary) {
-    let font = FontId::new(13.0, FontFamily::Monospace);
+fn render_lines(ui: &mut Ui, theme: ColorTheme, summary: &DiffSummary) {
+    let t = tokens(theme);
+    let mono = FontId::new(ts::MONO_CODE, FontFamily::Monospace);
+    let gutter = FontId::new(ts::MONO_UI, FontFamily::Monospace);
     for line in &summary.lines {
-        let (bg, marker, fg_dim) = match line.kind {
+        let (bg, marker, marker_color) = match line.kind {
             DiffKind::Added => (
-                Color32::from_rgba_premultiplied(35, 110, 60, 60),
+                t.success_bg,
                 "+",
-                Color32::from_rgb(120, 220, 150),
+                t.success,
             ),
             DiffKind::Removed => (
-                Color32::from_rgba_premultiplied(150, 50, 50, 60),
+                t.error_bg,
                 "−",
-                Color32::from_rgb(255, 140, 140),
+                t.error,
             ),
             DiffKind::Equal => (
                 Color32::TRANSPARENT,
                 " ",
-                ui.visuals().weak_text_color(),
+                t.text_muted,
             ),
         };
-        let frame = egui::Frame::default()
+        egui::Frame::default()
             .fill(bg)
             .inner_margin(egui::Margin {
-                left: 6.0,
-                right: 6.0,
+                left: space::S2,
+                right: space::S2,
                 top: 1.0,
                 bottom: 1.0,
+            })
+            .rounding(egui::Rounding::same(radii::XS))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "{:>4} {:>4}",
+                            line.old_line.map(|n| n.to_string()).unwrap_or_default(),
+                            line.new_line.map(|n| n.to_string()).unwrap_or_default(),
+                        ))
+                        .font(gutter.clone())
+                        .color(t.text_muted),
+                    );
+                    ui.label(
+                        RichText::new(format!(" {marker} "))
+                            .font(gutter.clone())
+                            .color(marker_color),
+                    );
+                    ui.label(RichText::new(&line.text).font(mono.clone()));
+                });
             });
-        frame.show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!(
-                        "{:>4} {:>4}",
-                        line.old_line.map(|n| n.to_string()).unwrap_or_default(),
-                        line.new_line.map(|n| n.to_string()).unwrap_or_default(),
-                    ))
-                    .font(font.clone())
-                    .color(fg_dim),
-                );
-                ui.label(
-                    RichText::new(format!(" {marker} "))
-                        .font(font.clone())
-                        .color(fg_dim),
-                );
-                ui.label(RichText::new(&line.text).font(font.clone()));
-            });
-        });
     }
     if summary.lines.is_empty() {
-        ui.label(RichText::new("No differences").weak());
+        ui.label(
+            RichText::new("No differences")
+                .color(t.text_muted)
+                .size(ts::LABEL),
+        );
     }
 }

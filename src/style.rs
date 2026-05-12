@@ -27,6 +27,12 @@ use crate::editor::language::ColorTheme;
 /// Member names map directly to STYLE_GUIDE.md §2. Add new tokens here
 /// only when the style guide gains a new entry — keep guide and code in
 /// lock-step.
+///
+/// `#[allow(dead_code)]` is intentional: every field is a public surface
+/// that downstream UI files may use. Many are consumed today; a few
+/// (notably the VCS palette beyond modified/added/deleted) await the
+/// features they belong to.
+#[allow(dead_code)]
 pub struct Tokens {
     // surfaces (dark → light layering)
     pub bg_canvas: Color32,

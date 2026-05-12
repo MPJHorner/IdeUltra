@@ -1,9 +1,12 @@
 use std::path::PathBuf;
 
-use egui::{Color32, Ui};
+use egui::{Ui, RichText};
 
+use crate::editor::language::ColorTheme;
 use crate::find::FindOptions;
 use crate::project_search::{LineMatch, SearchOutcome};
+use crate::style::{space, tokens, ts};
+use crate::ui::components::{ghost_button, primary_button, status_pill, StatusKind};
 
 #[derive(Default)]
 pub struct ProjectSearchState {
@@ -35,25 +38,33 @@ impl ProjectSearchState {
 
 pub enum ProjectSearchAction {
     None,
-    /// Run a search now with the current query.
     Run,
-    /// Open the given file and scroll to the byte range.
     OpenAt {
         path: PathBuf,
         byte_range: std::ops::Range<usize>,
     },
-    /// Replace every match across every file from the current outcome.
     ReplaceAll,
 }
 
-pub fn show(ui: &mut Ui, state: &mut ProjectSearchState) -> ProjectSearchAction {
+pub fn show(ui: &mut Ui, state: &mut ProjectSearchState, theme: ColorTheme) -> ProjectSearchAction {
     let mut action = ProjectSearchAction::None;
+    let t = tokens(theme);
 
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Project Search").strong());
-        if ui.small_button("✕").on_hover_text("Close").clicked() {
-            state.open = false;
-        }
+        ui.label(
+            RichText::new("Project Search")
+                .color(t.text_primary)
+                .size(ts::LABEL)
+                .strong(),
+        );
+        ui.with_layout(
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                if ui.small_button("✕").on_hover_text("Close").clicked() {
+                    state.open = false;
+                }
+            },
+        );
     });
     ui.separator();
 
@@ -101,27 +112,27 @@ pub fn show(ui: &mut Ui, state: &mut ProjectSearchState) -> ProjectSearchAction 
     });
 
     if state.show_replace {
-        ui.horizontal(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut state.replacement)
-                    .hint_text("Replace with")
-                    .desired_width(f32::INFINITY),
-            );
-        });
+        ui.add_space(space::S1);
+        ui.add(
+            egui::TextEdit::singleline(&mut state.replacement)
+                .hint_text("Replace with")
+                .desired_width(f32::INFINITY),
+        );
         ui.horizontal(|ui| {
             let has_matches = state
                 .outcome
                 .as_ref()
                 .map(|o| o.total_matches > 0 && o.error.is_none())
                 .unwrap_or(false);
-            let btn = egui::Button::new("Replace All in files");
-            if ui.add_enabled(has_matches, btn).clicked() {
-                action = ProjectSearchAction::ReplaceAll;
-            }
+            ui.add_enabled_ui(has_matches, |ui| {
+                if primary_button(ui, theme, "Replace All in files").clicked() {
+                    action = ProjectSearchAction::ReplaceAll;
+                }
+            });
             ui.label(
-                egui::RichText::new("Writes through to disk · no undo")
-                    .small()
-                    .weak(),
+                RichText::new("Writes through · no undo")
+                    .color(t.warning)
+                    .size(ts::CAPTION),
             );
         });
     }
@@ -131,9 +142,9 @@ pub fn show(ui: &mut Ui, state: &mut ProjectSearchState) -> ProjectSearchAction 
     if let Some(outcome) = &state.outcome {
         if let Some(err) = &outcome.error {
             ui.label(
-                egui::RichText::new(format!("Invalid regex: {err}"))
-                    .color(Color32::from_rgb(220, 80, 80))
-                    .small(),
+                RichText::new(format!("Invalid regex: {err}"))
+                    .color(t.error)
+                    .size(ts::LABEL_SM),
             );
             return action;
         }
@@ -146,14 +157,14 @@ pub fn show(ui: &mut Ui, state: &mut ProjectSearchState) -> ProjectSearchAction 
             )
         } else {
             format!(
-                "{} matches in {} files  ·  {} files scanned, {} skipped",
+                "{} matches in {} files · {} files scanned · {} skipped",
                 outcome.total_matches,
                 outcome.hits.len(),
                 outcome.files_scanned,
                 outcome.files_skipped
             )
         };
-        ui.label(egui::RichText::new(summary).small().weak());
+        ui.label(RichText::new(summary).color(t.text_muted).size(ts::CAPTION));
 
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
@@ -169,53 +180,89 @@ pub fn show(ui: &mut Ui, state: &mut ProjectSearchState) -> ProjectSearchAction 
                         .parent()
                         .and_then(|p| p.to_str())
                         .unwrap_or("");
+                    ui.add_space(space::S1);
                     ui.horizontal(|ui| {
                         ui.label(
-                            egui::RichText::new(name)
+                            RichText::new(name)
+                                .color(t.text_primary)
                                 .monospace()
+                                .size(ts::LABEL)
                                 .strong(),
                         );
                         ui.label(
-                            egui::RichText::new(parent)
+                            RichText::new(parent)
+                                .color(t.text_muted)
                                 .monospace()
-                                .weak()
-                                .small(),
+                                .size(ts::CAPTION),
+                        );
+                        // Match-count pill on the right.
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                status_pill(
+                                    ui,
+                                    theme,
+                                    StatusKind::Accent,
+                                    &file.matches.len().to_string(),
+                                );
+                            },
                         );
                     });
                     for m in &file.matches {
-                        if render_match_row(ui, m) {
+                        if render_match_row(ui, theme, m) {
                             action = ProjectSearchAction::OpenAt {
                                 path: file.path.clone(),
                                 byte_range: m.byte_range.clone(),
                             };
                         }
                     }
-                    ui.add_space(4.0);
                 }
                 if outcome.hits.is_empty() && !state.dirty {
                     ui.label(
-                        egui::RichText::new("No matches")
-                            .weak()
-                            .small(),
+                        RichText::new("No matches")
+                            .color(t.text_muted)
+                            .size(ts::LABEL_SM),
                     );
                 }
             });
     } else if state.dirty {
         ui.label(
-            egui::RichText::new("Press Enter or click Search")
-                .small()
-                .weak(),
+            RichText::new("Press Enter or click Search")
+                .color(t.text_muted)
+                .size(ts::LABEL_SM),
         );
+    } else {
+        // No search yet — empty hint.
+        ui.add_space(space::S2);
+        ui.label(
+            RichText::new("Type a query and press Enter")
+                .color(t.text_muted)
+                .size(ts::LABEL_SM),
+        );
+    }
+
+    // Close button at the very top closed via state.open; bubble up.
+    if !state.open {
+        // We toggled it above; nothing else to do — the parent loop reads state.
+        let _ = ghost_button; // satisfy unused-fn warning when only used above
     }
 
     action
 }
 
-fn render_match_row(ui: &mut Ui, m: &LineMatch) -> bool {
-    // Show "  42: line text" — clickable. Truncate very long lines.
+fn render_match_row(ui: &mut Ui, theme: ColorTheme, m: &LineMatch) -> bool {
+    let t = tokens(theme);
     let preview = truncate_middle(m.line_text.trim_start(), 140);
     let label = format!("  {:>5}:  {preview}", m.line);
-    let resp = ui.add(egui::SelectableLabel::new(false, label));
+    let resp = ui.add(
+        egui::SelectableLabel::new(
+            false,
+            RichText::new(label)
+                .color(t.text_secondary)
+                .monospace()
+                .size(ts::MONO_UI),
+        ),
+    );
     resp.clicked()
 }
 

@@ -2215,7 +2215,7 @@ impl eframe::App for IdeUltraApp {
                         self.sidebar_width = ui.available_width();
                         if self.project_search.open {
                             let action =
-                                project_search_panel::show(ui, &mut self.project_search);
+                                project_search_panel::show(ui, &mut self.project_search, self.theme);
                             match action {
                                 ProjectSearchAction::None => {}
                                 ProjectSearchAction::Run => run_search = true,
@@ -2368,7 +2368,7 @@ impl eframe::App for IdeUltraApp {
 
             // Find bar
             if self.find.open {
-                let action = find_bar::show(ui, &mut self.find);
+                let action = find_bar::show(ui, &mut self.find, self.theme);
                 self.apply_find_action(action);
             }
 
@@ -2376,31 +2376,39 @@ impl eframe::App for IdeUltraApp {
             let mut banner_reload = false;
             let mut banner_dismiss = false;
             let mut banner_view_diff = false;
-            if let Some(tab) = self.tabs.get(self.active_tab) {
-                if tab.external_change {
-                    egui::Frame::group(ui.style())
-                        .fill(egui::Color32::from_rgb(255, 220, 120))
-                        .inner_margin(egui::Margin::symmetric(8.0, 6.0))
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(
-                                        "This file changed on disk while you had unsaved edits.",
-                                    )
-                                    .color(egui::Color32::BLACK),
-                                );
-                                if ui.button("View diff").clicked() {
-                                    banner_view_diff = true;
-                                }
-                                if ui.button("Reload from disk").clicked() {
-                                    banner_reload = true;
-                                }
-                                if ui.button("Keep mine").clicked() {
-                                    banner_dismiss = true;
-                                }
-                            });
-                        });
-                }
+            let show_banner = self
+                .tabs
+                .get(self.active_tab)
+                .map(|t| t.external_change)
+                .unwrap_or(false);
+            if show_banner {
+                let theme = self.theme;
+                crate::ui::components::Banner::warning(
+                    ui,
+                    theme,
+                    "This file changed on disk while you had unsaved edits.",
+                    |ui| {
+                        if crate::ui::components::ghost_button(ui, theme, "Keep mine")
+                            .clicked()
+                        {
+                            banner_dismiss = true;
+                        }
+                        if crate::ui::components::ghost_button(
+                            ui,
+                            theme,
+                            "Reload from disk",
+                        )
+                        .clicked()
+                        {
+                            banner_reload = true;
+                        }
+                        if crate::ui::components::primary_button(ui, theme, "View diff")
+                            .clicked()
+                        {
+                            banner_view_diff = true;
+                        }
+                    },
+                );
             }
             if banner_view_diff {
                 self.open_diff_for_active_tab();
@@ -2560,6 +2568,7 @@ impl eframe::App for IdeUltraApp {
                 &self.tabs,
                 &self.tab_mru,
                 self.quick_switcher.selected,
+                self.theme,
             );
         }
 
@@ -2680,7 +2689,7 @@ impl eframe::App for IdeUltraApp {
         // ── diff modal (triggered from external-change banner) ──────────
         if let Some((tab_idx, summary, file_name)) = self.diff_modal.as_ref() {
             let tab_idx = *tab_idx;
-            let action = diff_modal::show(ctx, file_name, summary);
+            let action = diff_modal::show(ctx, file_name, summary, self.theme);
             match action {
                 DiffModalAction::None => {}
                 DiffModalAction::Close => self.diff_modal = None,
