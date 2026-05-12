@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use egui::{Align, Key, Layout, RichText, ScrollArea, Sense};
 
-use crate::finder::{search, FileIndex, Match};
+use crate::finder::{search_with_recent, FileIndex, Match};
 
 #[derive(Default)]
 pub struct FinderState {
@@ -27,8 +27,8 @@ impl FinderState {
         self.open = false;
     }
 
-    pub fn refresh(&mut self, index: &FileIndex) {
-        self.results = search(index, &self.query, 60);
+    pub fn refresh(&mut self, index: &FileIndex, recent: &[PathBuf]) {
+        self.results = search_with_recent(index, &self.query, recent, 60);
         if self.selected >= self.results.len() {
             self.selected = 0;
         }

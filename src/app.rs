@@ -1575,7 +1575,7 @@ impl IdeUltraApp {
         ws.ensure_index();
         if let Some(index) = ws.file_index.as_ref() {
             self.finder.open();
-            self.finder.refresh(index);
+            self.finder.refresh(index, &self.recent_files.entries);
         }
     }
 
@@ -2577,9 +2577,12 @@ impl eframe::App for IdeUltraApp {
 
         // ── fuzzy file finder modal (⌘P) ────────────────────────────────
         if self.finder.open {
+            // Clone the recent-files list once so the borrow doesn't fight
+            // with the workspace borrow below.
+            let recent = self.recent_files.entries.clone();
             let action = if let Some(ws) = self.workspace.as_ref() {
                 if let Some(index) = ws.file_index.as_ref() {
-                    self.finder.refresh(index);
+                    self.finder.refresh(index, &recent);
                     finder_modal::show(ctx, &mut self.finder, index)
                 } else {
                     FinderAction::Close

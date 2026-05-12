@@ -152,28 +152,48 @@ fn is_boundary(b: u8) -> bool {
 }
 
 /// Run `score` over the index and return the top `limit` matches.
-/// Caller passes `query` as-is; we lowercase once here.
+/// Caller passes `query` as-is; we lowercase once here. Equivalent to
+/// `search_with_recent(.., &[], ..)` and kept for tests / external use.
+#[allow(dead_code)]
 pub fn search(index: &FileIndex, query: &str, limit: usize) -> Vec<Match> {
+    search_with_recent(index, query, &[], limit)
+}
+
+/// Like `search` but biases results toward recently-opened files.
+///
+/// Empty query: surfaces recent files first (still capped at `limit`),
+/// then fills the remainder with arbitrary index entries.
+///
+/// Non-empty query: every match gets the regular fuzzy score; matches
+/// that are also in `recent` get a bonus inversely proportional to
+/// their MRU position. So a recent file with the same raw score as a
+/// non-recent file ranks higher.
+pub fn search_with_recent(
+    index: &FileIndex,
+    query: &str,
+    recent: &[std::path::PathBuf],
+    limit: usize,
+) -> Vec<Match> {
     if query.is_empty() {
-        return index
-            .paths
-            .iter()
-            .zip(index.displays.iter())
-            .take(limit)
-            .map(|(p, d)| Match {
-                score: 0,
-                path: p.clone(),
-                display: d.clone(),
-            })
-            .collect();
+        return empty_query_results(index, recent, limit);
     }
     let q = query.to_lowercase();
+    let recent_bonus: std::collections::HashMap<&std::path::Path, i32> = recent
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.as_path(), recent_score_bonus(i)))
+        .collect();
     let mut hits: Vec<Match> = index
         .haystacks
         .iter()
         .zip(index.displays.iter())
         .zip(index.paths.iter())
-        .filter_map(|((h, d), p)| score(h, &q).map(|s| (s, d, p)))
+        .filter_map(|((h, d), p)| {
+            score(h, &q).map(|s| {
+                let bonus = recent_bonus.get(p.as_path()).copied().unwrap_or(0);
+                (s + bonus, d, p)
+            })
+        })
         .map(|(s, d, p)| Match {
             score: s,
             path: p.clone(),
@@ -183,6 +203,62 @@ pub fn search(index: &FileIndex, query: &str, limit: usize) -> Vec<Match> {
     hits.sort_by(|a, b| b.score.cmp(&a.score));
     hits.truncate(limit);
     hits
+}
+
+fn empty_query_results(
+    index: &FileIndex,
+    recent: &[std::path::PathBuf],
+    limit: usize,
+) -> Vec<Match> {
+    // Build a lookup so we can yield recent files first (in MRU order)
+    // and then top up with anything else.
+    let display_by_path: std::collections::HashMap<&std::path::Path, &String> = index
+        .paths
+        .iter()
+        .zip(index.displays.iter())
+        .map(|(p, d)| (p.as_path(), d))
+        .collect();
+    let mut out = Vec::with_capacity(limit);
+    let mut seen: std::collections::HashSet<&std::path::Path> = Default::default();
+    for r in recent {
+        if let Some(display) = display_by_path.get(r.as_path()) {
+            out.push(Match {
+                score: 0,
+                path: r.clone(),
+                display: (*display).clone(),
+            });
+            seen.insert(r.as_path());
+            if out.len() >= limit {
+                return out;
+            }
+        }
+    }
+    // Fill remainder from the natural index order, skipping recents we
+    // already surfaced.
+    for (p, d) in index.paths.iter().zip(index.displays.iter()) {
+        if seen.contains(p.as_path()) {
+            continue;
+        }
+        out.push(Match {
+            score: 0,
+            path: p.clone(),
+            display: d.clone(),
+        });
+        if out.len() >= limit {
+            break;
+        }
+    }
+    out
+}
+
+/// MRU-position → score bump. Position 0 (most recent) gets a sizable
+/// boost; the bonus tapers off quickly. After ~10 entries the bonus
+/// is small enough not to override genuine fuzzy-match quality.
+fn recent_score_bonus(mru_pos: usize) -> i32 {
+    if mru_pos >= 10 {
+        return 5;
+    }
+    (50 - (mru_pos as i32 * 4)).max(5)
 }
 
 #[derive(Debug, Clone)]
@@ -323,5 +399,58 @@ mod tests {
         let idx = FileIndex::build(dir.path());
         let hits = search(&idx, "", 3);
         assert_eq!(hits.len(), 3);
+    }
+
+    #[test]
+    fn search_with_recent_empty_query_lists_recent_first() {
+        let dir = tempdir().unwrap();
+        for n in ["a.rs", "b.rs", "c.rs", "d.rs"] {
+            fs::write(dir.path().join(n), "").unwrap();
+        }
+        let idx = FileIndex::build(dir.path());
+        let recent = vec![dir.path().join("c.rs"), dir.path().join("a.rs")];
+        let hits = search_with_recent(&idx, "", &recent, 10);
+        assert_eq!(hits[0].path, recent[0]);
+        assert_eq!(hits[1].path, recent[1]);
+        assert!(hits.len() >= 4);
+    }
+
+    #[test]
+    fn search_with_recent_skips_recents_that_arent_in_index() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("real.rs"), "").unwrap();
+        let idx = FileIndex::build(dir.path());
+        let recent = vec![
+            std::path::PathBuf::from("/somewhere/else/gone.rs"),
+            dir.path().join("real.rs"),
+        ];
+        let hits = search_with_recent(&idx, "", &recent, 10);
+        // The non-index recent is filtered; the in-index one is first.
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].path.ends_with("real.rs"));
+    }
+
+    #[test]
+    fn search_with_recent_bumps_score_on_ties() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("alpha.rs"), "").unwrap();
+        fs::write(dir.path().join("beta.rs"), "").unwrap();
+        let idx = FileIndex::build(dir.path());
+        // Without bonus, both score identically for ".rs"; the order
+        // depends on file walker.
+        let recent = vec![dir.path().join("beta.rs")];
+        let hits = search_with_recent(&idx, ".rs", &recent, 10);
+        // The recent one should rank first regardless of walker order.
+        assert!(hits[0].path.ends_with("beta.rs"));
+    }
+
+    #[test]
+    fn recent_score_bonus_tapers_off() {
+        let first = recent_score_bonus(0);
+        let middle = recent_score_bonus(5);
+        let far = recent_score_bonus(50);
+        assert!(first > middle);
+        assert!(middle >= far);
+        assert!(far >= 5);
     }
 }
