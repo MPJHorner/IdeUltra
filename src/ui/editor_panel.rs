@@ -27,6 +27,7 @@ pub fn show(
     tab: &mut EditorTab,
     theme: ColorTheme,
     jump_to: Option<Jump>,
+    soft_wrap: bool,
 ) -> ShowResult {
     let editor_id = Id::new(("ide_editor", tab.path.as_path()));
 
@@ -58,17 +59,17 @@ pub fn show(
         .auto_shrink([false, false])
         .id_source(editor_id)
         .show(ui, |ui| {
-            let resp = ui.add_sized(
-                ui.available_size(),
-                egui::TextEdit::multiline(&mut tab.buffer.text)
-                    .id(editor_id)
-                    .font(FontId::new(FONT_SIZE, FontFamily::Monospace))
-                    .code_editor()
-                    .desired_rows(40)
-                    .lock_focus(true)
-                    .desired_width(f32::INFINITY)
-                    .layouter(&mut layouter),
-            );
+            let mut edit = egui::TextEdit::multiline(&mut tab.buffer.text)
+                .id(editor_id)
+                .font(FontId::new(FONT_SIZE, FontFamily::Monospace))
+                .code_editor()
+                .desired_rows(40)
+                .lock_focus(true)
+                .layouter(&mut layouter);
+            if !soft_wrap {
+                edit = edit.desired_width(f32::INFINITY);
+            }
+            let resp = ui.add_sized(ui.available_size(), edit);
 
             if let Some(jump) = jump_to {
                 if let Some(mut state) = TextEditState::load(ui.ctx(), editor_id) {

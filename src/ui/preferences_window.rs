@@ -6,6 +6,7 @@ use egui::{Align2, RichText, Slider, Ui};
 
 use crate::editor::language::ColorTheme;
 use crate::keymap::KeymapPreset;
+use crate::persistence::IndentStyle;
 
 pub enum PreferencesAction {
     None,
@@ -17,6 +18,10 @@ pub enum PreferencesAction {
     OpenKeymapPicker,
     SwitchKeymap(KeymapPreset),
     ResetZoom,
+    SetTrimWhitespace(bool),
+    SetEnsureFinalNewline(bool),
+    SetIndentStyle(IndentStyle),
+    SetSoftWrap(bool),
 }
 
 pub struct PreferencesView<'a> {
@@ -26,6 +31,10 @@ pub struct PreferencesView<'a> {
     pub markdown_preview: bool,
     pub keymap: KeymapPreset,
     pub state_dir: Option<&'a std::path::Path>,
+    pub trim_whitespace: bool,
+    pub ensure_final_newline: bool,
+    pub indent_style: IndentStyle,
+    pub soft_wrap: bool,
 }
 
 pub fn show(ctx: &egui::Context, view: &PreferencesView<'_>) -> PreferencesAction {
@@ -73,6 +82,31 @@ pub fn show(ctx: &egui::Context, view: &PreferencesView<'_>) -> PreferencesActio
                 });
             });
 
+            section(ui, "Editor", |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Indent style");
+                    ui.add_space(8.0);
+                    let options = [
+                        IndentStyle::Spaces(2),
+                        IndentStyle::Spaces(4),
+                        IndentStyle::Spaces(8),
+                        IndentStyle::Tab,
+                    ];
+                    for opt in options {
+                        if ui.radio(view.indent_style == opt, opt.label()).clicked() {
+                            action = PreferencesAction::SetIndentStyle(opt);
+                        }
+                    }
+                });
+                let mut wrap = view.soft_wrap;
+                if ui
+                    .checkbox(&mut wrap, "Soft-wrap long lines in the editor")
+                    .changed()
+                {
+                    action = PreferencesAction::SetSoftWrap(wrap);
+                }
+            });
+
             section(ui, "Files", |ui| {
                 let mut on = view.autosave;
                 if ui
@@ -80,6 +114,20 @@ pub fn show(ctx: &egui::Context, view: &PreferencesView<'_>) -> PreferencesActio
                     .changed()
                 {
                     action = PreferencesAction::SetAutosaveOnFocusLoss(on);
+                }
+                let mut trim = view.trim_whitespace;
+                if ui
+                    .checkbox(&mut trim, "Trim trailing whitespace on save")
+                    .changed()
+                {
+                    action = PreferencesAction::SetTrimWhitespace(trim);
+                }
+                let mut nl = view.ensure_final_newline;
+                if ui
+                    .checkbox(&mut nl, "Ensure a final newline on save")
+                    .changed()
+                {
+                    action = PreferencesAction::SetEnsureFinalNewline(nl);
                 }
                 ui.label(
                     RichText::new("Crash-recovery snapshots are written separately every second a buffer is dirty, and are surfaced on next launch.")

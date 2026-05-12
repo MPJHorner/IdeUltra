@@ -83,11 +83,28 @@ impl EditorTab {
         Ok(())
     }
 
+    /// Save the buffer to disk. The caller decides whether to normalize
+    /// the contents first via `apply_save_normalization`.
     pub fn save(&mut self) -> Result<()> {
         std::fs::write(&self.path, self.buffer.text.as_bytes())
             .with_context(|| format!("write {}", self.path.display()))?;
         self.buffer.mark_clean();
         Ok(())
+    }
+
+    /// Apply on-save text normalisation in-place. Pure delegations to
+    /// `crate::normalize` so this can be tested without touching disk.
+    pub fn apply_save_normalization(
+        &mut self,
+        trim_whitespace: bool,
+        ensure_final_newline: bool,
+    ) {
+        if trim_whitespace {
+            self.buffer.text = crate::normalize::trim_trailing_whitespace(&self.buffer.text);
+        }
+        if ensure_final_newline {
+            self.buffer.text = crate::normalize::ensure_final_newline(&self.buffer.text);
+        }
     }
 
     pub fn is_dirty(&self) -> bool {

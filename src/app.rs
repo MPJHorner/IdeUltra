@@ -75,6 +75,10 @@ pub struct IdeUltraApp {
     autosave_on_focus_loss: bool,
     /// Last-known viewport focus state. Auto-save fires on true → false.
     was_focused: bool,
+    trim_whitespace_on_save: bool,
+    ensure_final_newline_on_save: bool,
+    indent_style: crate::persistence::IndentStyle,
+    soft_wrap: bool,
     keymap: Keymap,
     keymap_preset: KeymapPreset,
     /// Whether the user has explicitly chosen a keymap. False on first run.
@@ -130,6 +134,10 @@ impl IdeUltraApp {
             recent_files: loaded.session.recent_files.clone(),
             autosave_on_focus_loss: loaded.settings.autosave_on_focus_loss,
             was_focused: true,
+            trim_whitespace_on_save: loaded.settings.trim_trailing_whitespace_on_save,
+            ensure_final_newline_on_save: loaded.settings.ensure_final_newline_on_save,
+            indent_style: loaded.settings.indent_style,
+            soft_wrap: loaded.settings.soft_wrap,
             keymap: Keymap::for_preset(loaded.settings.keymap_preset),
             keymap_preset: loaded.settings.keymap_preset,
             keymap_chosen: loaded.settings.keymap_chosen,
@@ -193,6 +201,10 @@ impl IdeUltraApp {
             autosave_on_focus_loss: self.autosave_on_focus_loss,
             keymap_preset: self.keymap_preset,
             keymap_chosen: self.keymap_chosen,
+            trim_trailing_whitespace_on_save: self.trim_whitespace_on_save,
+            ensure_final_newline_on_save: self.ensure_final_newline_on_save,
+            indent_style: self.indent_style,
+            soft_wrap: self.soft_wrap,
         }
     }
 
@@ -222,10 +234,13 @@ impl IdeUltraApp {
     fn autosave_all_dirty(&mut self) {
         let mut saved = 0usize;
         let mut errors = 0usize;
+        let trim = self.trim_whitespace_on_save;
+        let final_nl = self.ensure_final_newline_on_save;
         for tab in self.tabs.iter_mut() {
             if !tab.is_dirty() {
                 continue;
             }
+            tab.apply_save_normalization(trim, final_nl);
             match tab.save() {
                 Ok(_) => {
                     saved += 1;
@@ -415,6 +430,10 @@ impl IdeUltraApp {
 
     fn save_active(&mut self) {
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.apply_save_normalization(
+                self.trim_whitespace_on_save,
+                self.ensure_final_newline_on_save,
+            );
             match tab.save() {
                 Ok(_) => {
                     let msg = format!("Saved {}", tab.display_name);
@@ -423,8 +442,6 @@ impl IdeUltraApp {
                         let _ = store.clear(&tab.path);
                     }
                     tab.last_recovered_hash = None;
-                    // The save likely changed git status — refresh so the
-                    // sidebar marker reflects reality immediately.
                     if let Some(ws) = self.workspace.as_mut() {
                         ws.refresh_git_status();
                     }
@@ -949,7 +966,8 @@ impl IdeUltraApp {
             .and_then(|s| s.cursor.char_range())
             .map(|r| (r.primary.index, r.secondary.index))
             .unwrap_or((0, 0));
-        let unit = "    "; // 4 spaces — tabs vs spaces preference is a v0.7 setting
+        let unit_string = self.indent_style.as_string();
+        let unit = unit_string.as_str();
         let result = if dedent {
             crate::indent::dedent(&tab.buffer.text, selection, unit)
         } else {
@@ -1471,6 +1489,7 @@ impl eframe::App for IdeUltraApp {
 
         // ── central panel: tabs + find bar + editor ──────────────────────
         let theme = self.theme;
+        let self_soft_wrap = self.soft_wrap;
         CentralPanel::default().show(ctx, |ui| {
             if self.tabs.is_empty() {
                 ui.vertical_centered(|ui| {
@@ -1623,7 +1642,7 @@ impl eframe::App for IdeUltraApp {
                 None
             };
             if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                let res = editor_panel::show(ui, tab, theme, jump);
+                let res = editor_panel::show(ui, tab, theme, jump, self_soft_wrap);
                 self.caret_line_col = res
                     .caret_char_index
                     .map(|ci| line_col_at_char(&tab.buffer.text, ci));
@@ -1655,6 +1674,10 @@ impl eframe::App for IdeUltraApp {
                 markdown_preview: self.markdown_preview,
                 keymap: self.keymap_preset,
                 state_dir: state_dir.as_deref(),
+                trim_whitespace: self.trim_whitespace_on_save,
+                ensure_final_newline: self.ensure_final_newline_on_save,
+                indent_style: self.indent_style,
+                soft_wrap: self.soft_wrap,
             };
             match preferences_window::show(ctx, &view) {
                 PreferencesAction::None => {}
@@ -1686,6 +1709,22 @@ impl eframe::App for IdeUltraApp {
                 }
                 PreferencesAction::SwitchKeymap(p) => {
                     self.switch_keymap(p);
+                }
+                PreferencesAction::SetTrimWhitespace(b) => {
+                    self.trim_whitespace_on_save = b;
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::SetEnsureFinalNewline(b) => {
+                    self.ensure_final_newline_on_save = b;
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::SetIndentStyle(s) => {
+                    self.indent_style = s;
+                    self.saver.mark_dirty();
+                }
+                PreferencesAction::SetSoftWrap(b) => {
+                    self.soft_wrap = b;
+                    self.saver.mark_dirty();
                 }
             }
         }

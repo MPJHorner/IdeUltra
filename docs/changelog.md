@@ -3,6 +3,20 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.10.0 — 2026-05-12
+
+- **Trim trailing whitespace on save** and **ensure final newline on save**
+  — both default on, both toggleable from Preferences. Pure transforms,
+  unit-tested.
+- **Indent style preference.** Choose between **Tab**, **2 spaces**,
+  **4 spaces** (default), or **8 spaces**. Multi-line Tab/Shift+Tab in
+  the editor uses the chosen unit; single-caret Tab still passes through
+  to the TextEdit and inserts a literal tab.
+- **Soft wrap toggle.** Optional word-wrap for the editor — turn it on
+  for long-line files or prose. Off by default for code.
+- All four settings live under **Editor** / **Files** in the Preferences
+  window. Changes apply immediately and persist in `settings.json`.
+
 ## v0.9.0 — 2026-05-11
 
 - **Bracket-pair matching.** Place the caret on or just after a

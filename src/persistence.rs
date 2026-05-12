@@ -15,6 +15,35 @@ use crate::editor::language::ColorTheme;
 use crate::keymap::KeymapPreset;
 use crate::recent::RecentFiles;
 
+/// How a leading-indent unit is rendered when the user hits Tab on a
+/// multi-line selection (Tab key on single caret still inserts a `\t`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum IndentStyle {
+    Tab,
+    Spaces(u8),
+}
+
+impl Default for IndentStyle {
+    fn default() -> Self {
+        IndentStyle::Spaces(4)
+    }
+}
+
+impl IndentStyle {
+    pub fn as_string(self) -> String {
+        match self {
+            IndentStyle::Tab => "\t".to_string(),
+            IndentStyle::Spaces(n) => " ".repeat(n as usize),
+        }
+    }
+    pub fn label(self) -> String {
+        match self {
+            IndentStyle::Tab => "Tab".to_string(),
+            IndentStyle::Spaces(n) => format!("{n} spaces"),
+        }
+    }
+}
+
 /// User-tunable preferences. Survives across sessions; never touched
 /// during normal editing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +66,22 @@ pub struct Settings {
     /// install — drives the first-run keymap picker modal.
     #[serde(default)]
     pub keymap_chosen: bool,
+    #[serde(default = "default_trim_whitespace")]
+    pub trim_trailing_whitespace_on_save: bool,
+    #[serde(default = "default_ensure_final_newline")]
+    pub ensure_final_newline_on_save: bool,
+    #[serde(default)]
+    pub indent_style: IndentStyle,
+    #[serde(default)]
+    pub soft_wrap: bool,
+}
+
+fn default_trim_whitespace() -> bool {
+    true
+}
+
+fn default_ensure_final_newline() -> bool {
+    true
 }
 
 fn default_keymap_preset() -> KeymapPreset {
@@ -62,6 +107,10 @@ impl Default for Settings {
             autosave_on_focus_loss: true,
             keymap_preset: KeymapPreset::Default,
             keymap_chosen: false,
+            trim_trailing_whitespace_on_save: true,
+            ensure_final_newline_on_save: true,
+            indent_style: IndentStyle::default(),
+            soft_wrap: false,
         }
     }
 }

@@ -15,6 +15,7 @@ mod keymap;
 mod logging;
 mod markdown;
 mod mru;
+mod normalize;
 mod persistence;
 mod project_search;
 mod recent;
