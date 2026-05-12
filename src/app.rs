@@ -83,6 +83,7 @@ pub struct IdeUltraApp {
     ensure_final_newline_on_save: bool,
     indent_style: crate::persistence::IndentStyle,
     soft_wrap: bool,
+    check_for_updates: bool,
     keymap: Keymap,
     keymap_preset: KeymapPreset,
     /// Whether the user has explicitly chosen a keymap. False on first run.
@@ -110,6 +111,10 @@ pub struct IdeUltraApp {
     replace_confirm_open: bool,
     /// Counter for "Untitled N" filenames. Resets every launch.
     next_untitled_n: usize,
+    /// Result of the background update check, surfaced as a banner when set.
+    pending_update: Option<crate::updater::UpdateInfo>,
+    /// Channel where the update-check background thread delivers its result.
+    update_rx: Option<crossbeam_channel::Receiver<Option<crate::updater::UpdateInfo>>>,
     /// Active sidebar-driven name prompt (New File, New Folder, Rename).
     /// `parent_or_path` is the directory to create under, or the existing
     /// path being renamed.
@@ -159,6 +164,7 @@ impl IdeUltraApp {
             ensure_final_newline_on_save: loaded.settings.ensure_final_newline_on_save,
             indent_style: loaded.settings.indent_style,
             soft_wrap: loaded.settings.soft_wrap,
+            check_for_updates: loaded.settings.check_for_updates,
             keymap: Keymap::for_preset(loaded.settings.keymap_preset),
             keymap_preset: loaded.settings.keymap_preset,
             keymap_chosen: loaded.settings.keymap_chosen,
@@ -172,9 +178,14 @@ impl IdeUltraApp {
             focused_right: loaded.session.focused_right,
             replace_confirm_open: false,
             next_untitled_n: 1,
+            pending_update: None,
+            update_rx: None,
             name_prompt: None,
             delete_confirm: None,
         };
+        if loaded.settings.check_for_updates {
+            app.spawn_update_check();
+        }
         // Seed the MRU from the restored tabs so Ctrl+Tab works on first
         // launch. Order: active tab first, then the others in tab order.
         for i in 0..app.tabs.len() {
@@ -232,6 +243,7 @@ impl IdeUltraApp {
             ensure_final_newline_on_save: self.ensure_final_newline_on_save,
             indent_style: self.indent_style,
             soft_wrap: self.soft_wrap,
+            check_for_updates: self.check_for_updates,
         }
     }
 
@@ -1269,6 +1281,41 @@ impl IdeUltraApp {
         }
     }
 
+    fn spawn_update_check(&mut self) {
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        let current = env!("CARGO_PKG_VERSION").to_string();
+        std::thread::spawn(move || {
+            let result =
+                crate::updater::check(crate::updater::REPO, &current);
+            let payload = match result {
+                Ok(info) => info,
+                Err(err) => {
+                    tracing::debug!(error = %err, "update check failed");
+                    None
+                }
+            };
+            let _ = tx.send(payload);
+        });
+        self.update_rx = Some(rx);
+    }
+
+    fn drain_update_check(&mut self) {
+        let Some(rx) = self.update_rx.as_ref() else {
+            return;
+        };
+        if let Ok(payload) = rx.try_recv() {
+            if let Some(info) = payload {
+                tracing::info!(
+                    current = %info.current,
+                    latest = %info.latest,
+                    "update available"
+                );
+                self.pending_update = Some(info);
+            }
+            self.update_rx = None;
+        }
+    }
+
     fn new_untitled(&mut self) {
         let tab = EditorTab::new_untitled(self.next_untitled_n);
         self.next_untitled_n += 1;
@@ -1765,6 +1812,7 @@ impl eframe::App for IdeUltraApp {
         self.read_window_state(ctx);
         self.handle_focus_autosave(ctx);
         self.drain_watcher();
+        self.drain_update_check();
         self.write_recoveries();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.window_title()));
 
@@ -1957,6 +2005,43 @@ impl eframe::App for IdeUltraApp {
                 }
             });
         });
+
+        // ── update banner (under the menu bar) ──────────────────────────
+        if self.pending_update.is_some() {
+            let mut open_url: Option<String> = None;
+            let mut dismiss = false;
+            TopBottomPanel::top("update_banner").show(ctx, |ui| {
+                let info = self.pending_update.as_ref().unwrap();
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Update available: {} → {}",
+                            info.current, info.latest,
+                        ))
+                        .color(ui.visuals().hyperlink_color)
+                        .strong(),
+                    );
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if ui.small_button("Dismiss").clicked() {
+                                dismiss = true;
+                            }
+                            if ui.button("View release").clicked() {
+                                open_url = Some(info.html_url.clone());
+                            }
+                        },
+                    );
+                });
+            });
+            if let Some(url) = open_url {
+                crate::updater::open_in_browser(&url);
+                self.pending_update = None;
+            }
+            if dismiss {
+                self.pending_update = None;
+            }
+        }
 
         // ── status bar (bottom) ──────────────────────────────────────────
         TopBottomPanel::bottom("status_bar").show(ctx, |ui| {

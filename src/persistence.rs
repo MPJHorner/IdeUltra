@@ -74,6 +74,13 @@ pub struct Settings {
     pub indent_style: IndentStyle,
     #[serde(default)]
     pub soft_wrap: bool,
+    /// Check GitHub Releases for a newer version on launch.
+    #[serde(default = "default_update_check")]
+    pub check_for_updates: bool,
+}
+
+fn default_update_check() -> bool {
+    true
 }
 
 fn default_trim_whitespace() -> bool {
@@ -111,6 +118,7 @@ impl Default for Settings {
             ensure_final_newline_on_save: true,
             indent_style: IndentStyle::default(),
             soft_wrap: false,
+            check_for_updates: true,
         }
     }
 }

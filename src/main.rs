@@ -25,6 +25,7 @@ mod select_next;
 mod style;
 mod transforms;
 mod ui;
+mod updater;
 mod wordcount;
 mod workspace;
 

@@ -51,6 +51,20 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.19.0</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>Update checker.</strong> On launch, IdeUltra asks the
+          GitHub Releases API whether a newer tag is available. If yes, a
+          banner shows under the menu bar with the current → latest version
+          and a <strong>View release</strong> button that opens the GitHub
+          page in your browser. The check runs in a background thread so
+          startup latency is unchanged; the request fails silently when
+          offline. Disable via <code>check_for_updates: false</code> in
+          settings.json (not yet exposed in the Preferences UI).</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.18.0</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>Create new file from ⌘P.</strong> Type a relative path
