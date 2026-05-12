@@ -51,6 +51,29 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.21.0</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>Design system overhaul.</strong> A new
+          <a href="https://github.com/MPJHorner/IdeUltra/blob/main/STYLE_GUIDE.md">STYLE_GUIDE.md</a>
+          distils Zed, Linear, Cursor, Raycast, Vercel Geist, JetBrains Fleet,
+          and shadcn/ui into one design contract for IdeUltra. The runtime
+          expression lives in <code>src/style.rs</code> as semantic tokens
+          (surface ramp, foreground ramp, accent, status-with-tint, VCS palette,
+          shadow tiers, spacing grid, type scale, radii).</li>
+        <li><strong>Reusable components.</strong> New
+          <code>src/ui/components/</code> module: Card, ModalFrame,
+          PrimaryButton, GhostButton, IconButton, ListRow (4-state lifecycle),
+          Section, EmptyState, Pill (neutral + status), Hint, SearchInput,
+          Banner. Every component pulls colors/spacing from the tokens.</li>
+        <li><strong>UI sweep.</strong> Finder, command palette, preferences,
+          keymap picker, close/delete/replace/recovery/name-prompt modals,
+          and the update banner all now use the shared components. Modals
+          have proper shadows, the type scale is consistent, the 4-state
+          row lifecycle (default → hover → selected → focused) is uniform.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.20.0</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>Find within selection.</strong> Open the find bar

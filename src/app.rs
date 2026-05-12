@@ -2107,29 +2107,31 @@ impl eframe::App for IdeUltraApp {
         if self.pending_update.is_some() {
             let mut open_url: Option<String> = None;
             let mut dismiss = false;
+            let info = self.pending_update.as_ref().unwrap().clone();
+            let theme = self.theme;
             TopBottomPanel::top("update_banner").show(ctx, |ui| {
-                let info = self.pending_update.as_ref().unwrap();
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "Update available: {} → {}",
-                            info.current, info.latest,
-                        ))
-                        .color(ui.visuals().hyperlink_color)
-                        .strong(),
-                    );
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            if ui.small_button("Dismiss").clicked() {
-                                dismiss = true;
-                            }
-                            if ui.button("View release").clicked() {
-                                open_url = Some(info.html_url.clone());
-                            }
-                        },
-                    );
-                });
+                crate::ui::components::Banner::accent(
+                    ui,
+                    theme,
+                    &format!(
+                        "Update available: {} → {}",
+                        info.current, info.latest
+                    ),
+                    |ui| {
+                        if crate::ui::components::ghost_button(ui, theme, "Dismiss")
+                            .clicked()
+                        {
+                            dismiss = true;
+                        }
+                        if crate::ui::components::primary_button(
+                            ui, theme, "View release",
+                        )
+                        .clicked()
+                        {
+                            open_url = Some(info.html_url.clone());
+                        }
+                    },
+                );
             });
             if let Some(url) = open_url {
                 crate::updater::open_in_browser(&url);
@@ -2631,7 +2633,7 @@ impl eframe::App for IdeUltraApp {
         if self.name_prompt.is_some() {
             let action = {
                 let (state, _) = self.name_prompt.as_mut().unwrap();
-                name_prompt_modal::show(ctx, state)
+                name_prompt_modal::show(ctx, state, self.theme)
             };
             match action {
                 NamePromptAction::None => {}
@@ -2644,7 +2646,7 @@ impl eframe::App for IdeUltraApp {
         if let Some((path, is_dir)) = self.delete_confirm.as_ref() {
             let target = path.clone();
             let is_dir = *is_dir;
-            match delete_confirm_modal::show(ctx, &target, is_dir) {
+            match delete_confirm_modal::show(ctx, &target, is_dir, self.theme) {
                 DeleteAction::None => {}
                 DeleteAction::Cancel => self.delete_confirm = None,
                 DeleteAction::Confirm => self.perform_delete(),
@@ -2664,6 +2666,7 @@ impl eframe::App for IdeUltraApp {
                 match_count,
                 &query,
                 &replacement,
+                self.theme,
             ) {
                 ReplaceConfirmAction::None => {}
                 ReplaceConfirmAction::Cancel => self.replace_confirm_open = false,
@@ -2700,7 +2703,7 @@ impl eframe::App for IdeUltraApp {
 
         // ── recovery modal (startup) ────────────────────────────────────
         if !self.pending_recoveries.is_empty() {
-            let action = recovery_modal::show(ctx, &self.pending_recoveries);
+            let action = recovery_modal::show(ctx, &self.pending_recoveries, self.theme);
             if !matches!(action, RecoveryAction::None) {
                 self.apply_recovery_action(action);
             }
@@ -2713,7 +2716,7 @@ impl eframe::App for IdeUltraApp {
             } else {
                 let name = self.tabs[idx].display_name.clone();
                 let count = self.pending_close.len();
-                let action = close_confirm_modal::show(ctx, &name, count);
+                let action = close_confirm_modal::show(ctx, &name, count, self.theme);
                 match action {
                     CloseConfirmAction::None => {}
                     CloseConfirmAction::Save => {
@@ -2761,7 +2764,7 @@ impl eframe::App for IdeUltraApp {
         // ── keymap picker (first-run + on-demand) ───────────────────────
         if self.keymap_picker_open {
             let action =
-                keymap_picker::show(ctx, self.keymap_preset, !self.keymap_chosen);
+                keymap_picker::show(ctx, self.keymap_preset, !self.keymap_chosen, self.theme);
             match action {
                 KeymapPickerAction::None => {}
                 KeymapPickerAction::Choose(preset) => {
@@ -2773,7 +2776,7 @@ impl eframe::App for IdeUltraApp {
 
         // ── command palette (⇧⌘P) ───────────────────────────────────────
         if self.palette.open {
-            let action = command_palette_modal::show(ctx, &mut self.palette, &self.keymap);
+            let action = command_palette_modal::show(ctx, &mut self.palette, &self.keymap, self.theme);
             match action {
                 CommandPaletteAction::None => {}
                 CommandPaletteAction::Close => self.palette.close(),
@@ -2791,7 +2794,7 @@ impl eframe::App for IdeUltraApp {
             let action = if let Some(ws) = self.workspace.as_ref() {
                 if let Some(index) = ws.file_index.as_ref() {
                     self.finder.refresh(index, &recent, ws_root.as_deref());
-                    finder_modal::show(ctx, &mut self.finder, index)
+                    finder_modal::show(ctx, &mut self.finder, index, self.theme)
                 } else {
                     FinderAction::Close
                 }

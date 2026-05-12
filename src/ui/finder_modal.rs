@@ -1,8 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use egui::{Align, Key, Layout, RichText, ScrollArea, Sense};
+use egui::{Align, Key, Layout, RichText, ScrollArea};
 
+use crate::editor::language::ColorTheme;
 use crate::finder::{search_with_recent, FileIndex, Match};
+use crate::style::{space, tokens, ts};
+use crate::ui::components::{
+    empty_state, hint_row, list_row, modal_frame, search_input, RowState,
+};
 
 #[derive(Default)]
 pub struct FinderState {
@@ -34,8 +39,6 @@ impl FinderState {
         ws_root: Option<&Path>,
     ) {
         self.results = search_with_recent(index, &self.query, recent, 60);
-        // If the query is a valid relative path that doesn't match an
-        // existing file, surface a synthetic "+ Create file" row.
         if let Some(root) = ws_root {
             let query = self.query.trim();
             if !query.is_empty() && !query.split('/').any(|c| c == "..") {
@@ -64,8 +67,6 @@ impl FinderState {
 pub enum FinderAction {
     None,
     Open(PathBuf),
-    /// Selected a synthetic "Create file" entry — the app should
-    /// `fs::write(path, b"")` then open the file.
     Create(PathBuf),
     Close,
 }
@@ -74,6 +75,7 @@ pub fn show(
     ctx: &egui::Context,
     state: &mut FinderState,
     index: &FileIndex,
+    theme: ColorTheme,
 ) -> FinderAction {
     let mut action = FinderAction::None;
     let mut want_close = false;
@@ -101,80 +103,72 @@ pub fn show(
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_TOP, [0.0, 84.0])
-        .default_width(620.0)
-        .frame(modal_frame(ctx))
+        .default_width(640.0)
+        .frame(modal_frame(ctx, theme))
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.spacing_mut().item_spacing.y = space::S2;
 
-            // Search input with magnifying-glass affordance.
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("⌕").size(16.0).weak());
-                let input = ui.add(
-                    egui::TextEdit::singleline(&mut state.query)
-                        .hint_text("Type to filter files")
-                        .desired_width(f32::INFINITY)
-                        .font(egui::FontId::proportional(15.0))
-                        .frame(false),
-                );
-                if state.just_opened {
-                    input.request_focus();
-                    state.just_opened = false;
-                }
-            });
+            let input = search_input(ui, theme, "⌕", "Type to filter files", &mut state.query);
+            if state.just_opened {
+                input.request_focus();
+                state.just_opened = false;
+            }
+
+            ui.add_space(space::S1);
             ui.separator();
 
             ScrollArea::vertical()
-                .max_height(400.0)
+                .max_height(420.0)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     if state.results.is_empty() {
-                        ui.add_space(8.0);
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                RichText::new(if state.query.is_empty() {
-                                    "Start typing to filter"
-                                } else {
-                                    "No matches"
-                                })
-                                .weak()
-                                .small(),
-                            );
-                        });
-                        ui.add_space(8.0);
+                        empty_state(
+                            ui,
+                            theme,
+                            if state.query.is_empty() { "⌕" } else { "∅" },
+                            if state.query.is_empty() {
+                                "Start typing"
+                            } else {
+                                "No matches"
+                            },
+                            if state.query.is_empty() {
+                                "Search the workspace by filename or path."
+                            } else {
+                                "Try a different query or check spelling."
+                            },
+                        );
                     } else {
                         for (idx, m) in state.results.iter().enumerate() {
-                            if render_row(ui, m, idx == state.selected) {
+                            let row_state = if idx == state.selected {
+                                RowState::SelectedFocused
+                            } else {
+                                RowState::Default
+                            };
+                            let row_resp = list_row(ui, theme, row_state, |ui| {
+                                render_row_content(ui, theme, m, idx == state.selected);
+                            });
+                            if row_resp.clicked() {
                                 want_open = Some(m.clone());
-                            }
-                            if ui
-                                .interact(
-                                    ui.min_rect(),
-                                    egui::Id::new(("finder_row_hover", idx)),
-                                    Sense::hover(),
-                                )
-                                .hovered()
-                            {
-                                // Hover-to-select is too jittery on a dense
-                                // list; left out intentionally. Click selects.
                             }
                         }
                     }
                 });
+
             ui.separator();
             ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new("↑↓ navigate   ⏎ open   esc close")
-                        .small()
-                        .weak(),
-                );
+                hint_row(ui, theme, &["↑↓ navigate", "⏎ open", "esc close"]);
                 let count_text = if index.truncated {
                     format!("{}+ files", index.len())
                 } else {
                     format!("{} files", index.len())
                 };
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(RichText::new(count_text).small().weak());
+                    ui.label(
+                        RichText::new(count_text)
+                            .color(tokens(theme).text_muted)
+                            .size(ts::CAPTION),
+                    );
                 });
             });
         });
@@ -191,101 +185,59 @@ pub fn show(
     action
 }
 
-/// Render one result row. Returns `true` if the user clicked it.
-fn render_row(ui: &mut egui::Ui, m: &Match, selected: bool) -> bool {
-    let visuals = ui.visuals();
-    let row_fill = if selected {
-        visuals.selection.bg_fill
-    } else {
-        egui::Color32::TRANSPARENT
-    };
-    let name_color = if selected {
-        visuals.selection.stroke.color
-    } else if m.is_create {
-        visuals.hyperlink_color
-    } else {
-        visuals.text_color()
-    };
+fn render_row_content(ui: &mut egui::Ui, theme: ColorTheme, m: &Match, selected: bool) {
+    let t = tokens(theme);
+    let name_color = if selected { t.accent } else { t.text_primary };
     let path_color = if selected {
-        visuals.selection.stroke.color.linear_multiply(0.7)
+        t.accent.linear_multiply(0.75)
     } else {
-        visuals.weak_text_color()
+        t.text_muted
     };
-
-    let frame = egui::Frame::default()
-        .fill(row_fill)
-        .rounding(egui::Rounding::same(4.0))
-        .inner_margin(egui::Margin {
-            left: 10.0,
-            right: 10.0,
-            top: 6.0,
-            bottom: 6.0,
-        });
-
-    let response = frame
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if m.is_create {
-                    // Synthetic "Create file" entry: leading +, then full
-                    // query as the label, then "(create new file)" hint.
-                    ui.label(RichText::new("+").size(14.0).color(name_color));
-                    ui.add_space(4.0);
-                    ui.label(
-                        RichText::new(&m.display)
-                            .size(14.0)
-                            .strong()
-                            .color(name_color),
-                    );
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new("create new file")
-                            .size(12.0)
-                            .color(path_color)
-                            .italics(),
-                    );
-                } else {
-                    let (filename, dir) = split_display(&m.display);
-                    let icon = file_glyph(filename);
-                    ui.label(RichText::new(icon).size(14.0).color(path_color));
-                    ui.add_space(4.0);
-                    ui.label(
-                        RichText::new(filename)
-                            .size(14.0)
-                            .strong()
-                            .color(name_color),
-                    );
-                    if !dir.is_empty() {
-                        ui.add_space(8.0);
-                        ui.label(
-                            RichText::new(dir)
-                                .size(12.0)
-                                .color(path_color),
-                        );
-                    }
-                }
-            });
-        })
-        .response
-        .interact(Sense::click());
-    response.clicked()
+    ui.horizontal(|ui| {
+        if m.is_create {
+            ui.label(
+                RichText::new("+")
+                    .color(t.accent)
+                    .size(ts::BODY)
+                    .strong(),
+            );
+            ui.add_space(space::S1);
+            ui.label(
+                RichText::new(&m.display)
+                    .color(t.accent)
+                    .size(ts::BODY)
+                    .strong(),
+            );
+            ui.add_space(space::S2);
+            ui.label(
+                RichText::new("create new file")
+                    .color(t.text_muted)
+                    .size(ts::LABEL_SM)
+                    .italics(),
+            );
+        } else {
+            let (filename, dir) = split_display(&m.display);
+            let icon = file_glyph(filename);
+            ui.label(RichText::new(icon).color(path_color).size(ts::BODY));
+            ui.add_space(space::S1);
+            ui.label(
+                RichText::new(filename)
+                    .color(name_color)
+                    .size(ts::BODY)
+                    .strong(),
+            );
+            if !dir.is_empty() {
+                ui.add_space(space::S2);
+                ui.label(
+                    RichText::new(dir)
+                        .color(path_color)
+                        .size(ts::LABEL_SM),
+                );
+            }
+        }
+    });
 }
 
-fn modal_frame(ctx: &egui::Context) -> egui::Frame {
-    let v = ctx.style().visuals.clone();
-    egui::Frame::window(&ctx.style())
-        .fill(v.panel_fill)
-        .stroke(egui::Stroke::new(1.0, v.widgets.noninteractive.bg_stroke.color))
-        .rounding(egui::Rounding::same(10.0))
-        .shadow(egui::epaint::Shadow {
-            offset: egui::vec2(0.0, 8.0),
-            blur: 24.0,
-            spread: 0.0,
-            color: egui::Color32::from_black_alpha(80),
-        })
-        .inner_margin(egui::Margin::symmetric(12.0, 10.0))
-}
-
-/// Split `src/foo/bar.rs` into (`bar.rs`, `src/foo`).
 fn split_display(display: &str) -> (&str, &str) {
     match display.rfind('/') {
         Some(i) => (&display[i + 1..], &display[..i]),
@@ -293,8 +245,6 @@ fn split_display(display: &str) -> (&str, &str) {
     }
 }
 
-/// Cheap file-glyph by extension. Not exhaustive — picks the kind of icon
-/// that helps the eye scan the list.
 fn file_glyph(name: &str) -> &'static str {
     let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
     match ext.as_str() {

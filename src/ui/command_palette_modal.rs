@@ -1,7 +1,12 @@
-use egui::{Align, Color32, Key, Layout, RichText, ScrollArea, Sense};
+use egui::{Align, Key, Layout, RichText, ScrollArea};
 
 use crate::command_palette::{rank, CommandId, RankedCommand};
+use crate::editor::language::ColorTheme;
 use crate::keymap::Keymap;
+use crate::style::{space, tokens, ts};
+use crate::ui::components::{
+    empty_state, hint_row, list_row, modal_frame, search_input, RowState,
+};
 
 #[derive(Default)]
 pub struct CommandPaletteState {
@@ -43,6 +48,7 @@ pub fn show(
     ctx: &egui::Context,
     state: &mut CommandPaletteState,
     keymap: &Keymap,
+    theme: ColorTheme,
 ) -> CommandPaletteAction {
     let mut action = CommandPaletteAction::None;
     let mut want_close = false;
@@ -70,27 +76,22 @@ pub fn show(
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_TOP, [0.0, 84.0])
-        .default_width(620.0)
-        .frame(modal_frame(ctx))
+        .default_width(640.0)
+        .frame(modal_frame(ctx, theme))
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("⌘").size(16.0).weak());
-                let input = ui.add(
-                    egui::TextEdit::singleline(&mut state.query)
-                        .hint_text("Type a command")
-                        .desired_width(f32::INFINITY)
-                        .font(egui::FontId::proportional(15.0))
-                        .frame(false),
-                );
-                if state.just_opened {
-                    input.request_focus();
-                    state.just_opened = false;
-                }
-                if input.changed() {
-                    state.refresh();
-                }
-            });
+            ui.spacing_mut().item_spacing.y = space::S2;
+
+            let input =
+                search_input(ui, theme, "⌘", "Type a command", &mut state.query);
+            if state.just_opened {
+                input.request_focus();
+                state.just_opened = false;
+            }
+            if input.changed() {
+                state.refresh();
+            }
+
+            ui.add_space(space::S1);
             ui.separator();
 
             ScrollArea::vertical()
@@ -98,36 +99,43 @@ pub fn show(
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 1.0;
-                    for (idx, r) in state.results.iter().enumerate() {
-                        let selected = idx == state.selected;
-                        if render_row(ui, r, keymap, selected) {
-                            want_run = Some(r.entry.id);
-                        }
-                    }
                     if state.results.is_empty() {
-                        ui.add_space(8.0);
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                RichText::new(if state.query.is_empty() {
-                                    "Start typing"
-                                } else {
-                                    "No matches"
-                                })
-                                .weak()
-                                .small(),
-                            );
-                        });
+                        empty_state(
+                            ui,
+                            theme,
+                            "⌘",
+                            if state.query.is_empty() {
+                                "Start typing"
+                            } else {
+                                "No commands match"
+                            },
+                            "Search every menu action by name.",
+                        );
+                    } else {
+                        for (idx, r) in state.results.iter().enumerate() {
+                            let row_state = if idx == state.selected {
+                                RowState::SelectedFocused
+                            } else {
+                                RowState::Default
+                            };
+                            let row_resp = list_row(ui, theme, row_state, |ui| {
+                                render_row_content(ui, theme, r, keymap, idx == state.selected);
+                            });
+                            if row_resp.clicked() {
+                                want_run = Some(r.entry.id);
+                            }
+                        }
                     }
                 });
 
             ui.separator();
             ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new("↑↓ navigate   ⏎ run   esc close").small().weak(),
-                );
+                hint_row(ui, theme, &["↑↓ navigate", "⏎ run", "esc close"]);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.label(
-                        RichText::new(keymap.preset.label()).small().weak(),
+                        RichText::new(keymap.preset.label())
+                            .color(tokens(theme).text_muted)
+                            .size(ts::CAPTION),
                     );
                 });
             });
@@ -141,90 +149,51 @@ pub fn show(
     action
 }
 
-fn render_row(
+fn render_row_content(
     ui: &mut egui::Ui,
+    theme: ColorTheme,
     r: &RankedCommand,
     keymap: &Keymap,
     selected: bool,
-) -> bool {
-    let visuals = ui.visuals();
-    let bg = if selected {
-        visuals.selection.bg_fill
-    } else {
-        Color32::TRANSPARENT
-    };
-    let fg = if selected {
-        visuals.selection.stroke.color
-    } else {
-        visuals.text_color()
-    };
+) {
+    let t = tokens(theme);
+    let primary = if selected { t.accent } else { t.text_primary };
     let dim = if selected {
-        visuals.selection.stroke.color.linear_multiply(0.7)
+        t.accent.linear_multiply(0.75)
     } else {
-        visuals.weak_text_color()
+        t.text_muted
     };
-
-    // Take the live shortcut from the keymap if there is one; otherwise
-    // fall back to the entry's hint string (used for items that don't
-    // have a global shortcut, like "Sort Lines").
     let live = keymap.label_for(r.entry.id);
-    let keys = if live.is_empty() { r.entry.keys.to_string() } else { live };
-
-    let frame = egui::Frame::default()
-        .fill(bg)
-        .rounding(egui::Rounding::same(4.0))
-        .inner_margin(egui::Margin {
-            left: 10.0,
-            right: 10.0,
-            top: 6.0,
-            bottom: 6.0,
-        });
-    let resp = frame
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                let (group, action) = split_label(r.entry.label);
-                ui.label(RichText::new(group).size(13.0).color(dim));
-                ui.label(RichText::new(action).size(14.0).color(fg));
-                if !keys.is_empty() {
-                    ui.with_layout(
-                        Layout::right_to_left(Align::Center),
-                        |ui| {
-                            ui.label(
-                                RichText::new(keys)
-                                    .monospace()
-                                    .size(12.5)
-                                    .color(dim),
-                            );
-                        },
+    let keys = if live.is_empty() {
+        r.entry.keys.to_string()
+    } else {
+        live
+    };
+    ui.horizontal(|ui| {
+        let (group, label) = split_label(r.entry.label);
+        if !group.is_empty() {
+            ui.label(RichText::new(group).color(dim).size(ts::LABEL));
+        }
+        ui.label(RichText::new(label).color(primary).size(ts::BODY));
+        if !keys.is_empty() {
+            ui.with_layout(
+                Layout::right_to_left(Align::Center),
+                |ui| {
+                    ui.label(
+                        RichText::new(keys)
+                            .monospace()
+                            .color(dim)
+                            .size(ts::KEYCAP),
                     );
-                }
-            });
-        })
-        .response
-        .interact(Sense::click());
-    resp.clicked()
+                },
+            );
+        }
+    });
 }
 
-/// Split "File: Open File…" into ("File", "Open File…"). Falls back to
-/// ("", whole-label) if there's no `: ` separator.
 fn split_label(label: &str) -> (&str, &str) {
     match label.find(": ") {
         Some(i) => (&label[..i], &label[i + 2..]),
         None => ("", label),
     }
-}
-
-fn modal_frame(ctx: &egui::Context) -> egui::Frame {
-    let v = ctx.style().visuals.clone();
-    egui::Frame::window(&ctx.style())
-        .fill(v.panel_fill)
-        .stroke(egui::Stroke::new(1.0, v.widgets.noninteractive.bg_stroke.color))
-        .rounding(egui::Rounding::same(10.0))
-        .shadow(egui::epaint::Shadow {
-            offset: egui::vec2(0.0, 8.0),
-            blur: 24.0,
-            spread: 0.0,
-            color: egui::Color32::from_black_alpha(80),
-        })
-        .inner_margin(egui::Margin::symmetric(12.0, 10.0))
 }

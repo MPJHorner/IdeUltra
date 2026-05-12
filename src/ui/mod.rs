@@ -1,5 +1,6 @@
 pub mod close_confirm_modal;
 pub mod command_palette_modal;
+pub mod components;
 pub mod delete_confirm_modal;
 pub mod diff_modal;
 pub mod editor_panel;
