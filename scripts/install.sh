@@ -68,9 +68,16 @@ if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
 fi
 
 info "Mounting"
-MOUNT_OUT=$(hdiutil attach -nobrowse -noautoopen -quiet "$DMG_PATH")
-MOUNT_POINT=$(printf '%s' "$MOUNT_OUT" | awk -F'\t' 'NF>=3 { last=$NF } END { print last }')
-[ -d "$MOUNT_POINT" ] || fail "Could not determine mount point."
+# Use -plist so we can parse the mount point reliably. (-quiet would
+# suppress the very output we need.)
+MOUNT_PLIST=$(hdiutil attach -nobrowse -noautoopen -plist "$DMG_PATH") \
+  || fail "hdiutil attach failed."
+MOUNT_POINT=$(printf '%s' "$MOUNT_PLIST" \
+  | grep -A1 '<key>mount-point</key>' \
+  | grep '<string>' \
+  | head -n1 \
+  | sed -E 's|.*<string>([^<]+)</string>.*|\1|')
+[ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ] || fail "Could not determine mount point."
 trap 'hdiutil detach -quiet "$MOUNT_POINT" >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
 
 SRC_APP="$MOUNT_POINT/${APP_NAME}.app"
