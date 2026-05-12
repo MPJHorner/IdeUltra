@@ -1,118 +1,281 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="utf-8">
-<title>IdeUltra — a snappy, native, local-first code IDE</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="IdeUltra is a fast, native code editor in the Ultra family. Pure Rust + egui, single binary, zero telemetry, MIT.">
-<link rel="stylesheet" href="assets/style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0a0d11" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+  <meta name="color-scheme" content="dark light" />
+
+  <title>IdeUltra: a snappy, native, local-first code IDE</title>
+  <meta name="description" content="A snappy, native macOS code IDE. Pure Rust + egui. 7.6 MB universal binary. No browser, no cloud, no telemetry. Part of the Ultra family." />
+  <link rel="canonical" href="https://mpjhorner.github.io/IdeUltra/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="IdeUltra: a snappy, native, local-first code IDE" />
+  <meta property="og:description" content="A snappy, native macOS code IDE. Pure Rust + egui. 7.6 MB universal binary. No browser, no cloud, no telemetry." />
+  <meta property="og:url" content="https://mpjhorner.github.io/IdeUltra/" />
+  <meta property="og:site_name" content="IdeUltra" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="IdeUltra: a snappy, native, local-first code IDE" />
+  <meta name="twitter:description" content="A snappy, native macOS code IDE. Pure Rust + egui. 7.6 MB universal binary. No browser, no cloud, no telemetry." />
+  <link rel="alternate" type="application/rss+xml" title="IdeUltra changelog" href="/IdeUltra/changelog.xml" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"IdeUltra","operatingSystem":"macOS","applicationCategory":"DeveloperApplication","description":"A snappy, native, local-first code IDE. Pure Rust + egui.","softwareVersion":"0.13.0","license":"https://opensource.org/licenses/MIT","downloadUrl":"https://github.com/MPJHorner/IdeUltra/releases/latest","url":"https://mpjhorner.github.io/IdeUltra/","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
+  <link rel="icon" href="/IdeUltra/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/IdeUltra/style.css" />
+  <script>
+    (function () {
+      try {
+        const t = localStorage.getItem('ide-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
-
-<header class="site">
-  <a class="brand" href="./">IdeUltra</a>
-  <nav>
-    <a href="install.html">Install</a>
-    <a href="quickstart.html">Quick Start</a>
-    <a href="shortcuts.html">Shortcuts</a>
-    <a href="preferences.html">Preferences</a>
-    <a href="changelog.html">Changelog</a>
-    <a href="https://github.com/MPJHorner/IdeUltra">GitHub</a>
-  </nav>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/IdeUltra/" aria-label="IdeUltra home">
+      <svg class="brand-logo" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+        <defs><linearGradient id="navg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67E8F9"/><stop offset="1" stop-color="#2F80FF"/></linearGradient></defs>
+        <rect width="32" height="32" rx="7" fill="url(#navg)" opacity=".22"/>
+        <path d="M11.5 9 6 15.4v1.2L11.5 23l2-2-4.5-4.5L13 12.4 11.5 9Zm9 0-2 2L23 15.6l-4.5 4.5 2 2L26 16.6v-1.2L20.5 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">Ide <span class="brand-mark">Ultra</span></span>
+    </a>
+    <nav class="primary-nav" aria-label="Primary">
+      <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-list" aria-label="Toggle navigation">
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+      </button>
+      <div class="nav-list" id="nav-list">
+        <a class="nav-link" href="/IdeUltra/install/">Install</a>
+        <a class="nav-link" href="/IdeUltra/quick-start/">Quick start</a>
+        <a class="nav-link" href="/IdeUltra/shortcuts/">Shortcuts</a>
+        <a class="nav-link" href="/IdeUltra/preferences/">Preferences</a>
+        <a class="nav-link" href="/IdeUltra/changelog/">Changelog</a>
+        <div class="nav-actions">
+          <button class="icon-btn theme-toggle" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5a6.5 6.5 0 1 0 6.4 5.4 5.5 5.5 0 0 1-6.9-6.9A6.6 6.6 0 0 0 8 1.5Z"/></svg>
+          </button>
+          <a class="icon-btn github-link" href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer" aria-label="GitHub repository" title="GitHub">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.51-1.08-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.21-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.92.08 2.13.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </div>
 </header>
 
-<main>
+<main class="page home-page">
+  <article class="prose">
+    <section class="hero">
+      <span class="hero-eyebrow"><span class="badge">v0.13.0</span> Native macOS · pure Rust + egui · universal binary</span>
+      <h1>A code IDE that's actually <span class="accent">snappy</span>.</h1>
+      <p class="lede">IdeUltra is a native macOS code editor that opens in under 150&nbsp;ms and paints every keystroke in under 16&nbsp;ms. Pure Rust on top of egui — no Electron, no webview, no language server doing first-run indexing on a 50,000-file repo. Open a folder, edit, save. That's the whole loop.</p>
 
-  <section class="hero">
-    <h1>IdeUltra</h1>
-    <p class="tag">A snappy, native, local-first code IDE. Open a folder, edit, save. That's it.</p>
+      <div class="hero-actions">
+        <a class="btn primary" href="/IdeUltra/install/">Download for macOS</a>
+        <a class="btn ghost" href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.51-1.08-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.21-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.92.08 2.13.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          View on GitHub
+        </a>
+      </div>
 
-<pre><code>git clone https://github.com/MPJHorner/IdeUltra.git
+      <div class="hero-oneliner">
+        <code>git clone https://github.com/MPJHorner/IdeUltra &amp;&amp; cd IdeUltra &amp;&amp; cargo run --release</code>
+      </div>
+
+      <div class="hero-meta">
+        <span><strong>macOS 11+</strong> · universal arm64 + x86_64</span>
+        <span><strong>7.6 MB</strong> binary, 9.8 MB DMG</span>
+        <span><strong>MIT</strong> licensed</span>
+        <span><strong>0 telemetry</strong> · runs offline</span>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-eyebrow">Why IdeUltra</div>
+      <h2>An editor with no patience for warm-up.</h2>
+      <p class="section-lede">Most editors spend their first second on language servers, indexing, telemetry beacons. IdeUltra is the editor you reach for when starting a heavy one feels like too much friction. It's not a replacement for your full-fat IDE — it's the tool you actually use for the next ten minutes.</p>
+
+      <div class="feature-grid">
+        <div class="feature">
+          <h3><span class="feature-icon">⚡</span> Cold-start &lt; 150&nbsp;ms</h3>
+          <p>From <code>open</code> to a focused editor in less time than your terminal prompt blinks. Keystroke-to-paint stays under 16&nbsp;ms even on a 10,000-line file.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">🌳</span> Lazy file tree</h3>
+          <p>The sidebar opens a 50k-file workspace instantly because it only reads the directory you're looking at. <code>.gitignore</code> aware out of the box.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">🎨</span> Syntect highlighting</h3>
+          <p>~100 languages via Sublime-grade <code>syntect</code> rules. Two bundled themes that match the egui dark/light visuals.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">🔎</span> Fuzzy file + project search</h3>
+          <p><kbd>⌘P</kbd> filters every file in the workspace. <kbd>⇧⌘F</kbd> searches across them. <kbd>⌘D</kbd> selects the next occurrence of the word under the caret.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">⎘</span> Split editor</h3>
+          <p><kbd>⌘\</kbd> opens a second pane with its own active tab. Click in either pane to focus it; click again to collapse.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">🛡</span> Crash recovery</h3>
+          <p>Every dirty buffer snapshots to disk every second. Force-quit IdeUltra and the next launch offers to restore your unsaved work.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">⌨</span> Keymap presets</h3>
+          <p>Welcome screen lets you pick <strong>IdeUltra Default</strong>, <strong>VS Code</strong>, or <strong>PhpStorm</strong>. Switch any time from the menu — the command palette updates its hints live.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">📝</span> Markdown preview</h3>
+          <p><kbd>⌥⌘M</kbd> opens a live side-pane on <code>.md</code> tabs. Headings, code blocks, lists, blockquotes, clickable links — all rendered as you type.</p>
+        </div>
+        <div class="feature">
+          <h3><span class="feature-icon">🌿</span> Git status decorations</h3>
+          <p>Sidebar files get a coloured <code>M</code>/<code>A</code>/<code>?</code>/<code>D</code> badge in any git repo. Refreshes on save and on focus regain.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-eyebrow">30-second tour</div>
+      <h2>Install. Open a folder. Edit.</h2>
+      <p class="section-lede">Drop <strong>IdeUltra.app</strong> in <code>/Applications</code>, open it. The welcome modal asks for your keymap once. Press <kbd>⇧⌘O</kbd> to open a folder and you're working.</p>
+
+      <div class="tour">
+        <div class="tour-step">
+          <span class="step-num">01</span>
+          <h3>Install</h3>
+          <p>Mount the universal <code>.dmg</code>, drag <strong>IdeUltra.app</strong> to <code>/Applications</code>. First launch is Gatekeeper-prompted because the binary isn't notarised yet.</p>
+<pre>$ open IdeUltra-0.13.0.dmg
+<span class="t-mute"># drag → /Applications</span>
+$ xattr -d com.apple.quarantine /Applications/IdeUltra.app</pre>
+        </div>
+        <div class="tour-step">
+          <span class="step-num">02</span>
+          <h3>Pick a keymap</h3>
+          <p>First launch shows a welcome modal with three presets. The palette and menu shortcuts update live — try them from the very first frame.</p>
+<pre><span class="t-mute"># Default</span>    ⌘P  Go to file
+<span class="t-mute"># VS Code</span>    ⌘P  Go to file
+<span class="t-mute"># PhpStorm</span>   ⇧⌘O Go to file</pre>
+        </div>
+        <div class="tour-step">
+          <span class="step-num">03</span>
+          <h3>Edit</h3>
+          <p>Click a file in the sidebar (or <kbd>⌘P</kbd>). Type. <kbd>⌘S</kbd> writes. Window title + tab show a dot while dirty. External edits propagate live; dirty buffers show a "View diff" banner.</p>
+<pre><span class="t-mute">●</span>  src/app.rs  /Users/you/proj  ·  Ln 142, Col 12  ·  Rust</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-eyebrow">Built for the way you actually code</div>
+      <h2>Use cases.</h2>
+
+      <div class="use-grid">
+        <div class="use">
+          <h3>Quick edits without booting your full IDE</h3>
+          <p>Tweak a config, fix a typo in a README, comment out a line in <code>nginx.conf</code>. IdeUltra opens before VS Code's splash screen finishes drawing.</p>
+        </div>
+        <div class="use">
+          <h3>Reviewing a downloaded repo</h3>
+          <p>Just cloned a repo to read one function? Open it, hit <kbd>⌘P</kbd>, jump to the file. No language-server indexing, no extensions modal.</p>
+        </div>
+        <div class="use">
+          <h3>Pairing with coding agents</h3>
+          <p>The watcher catches agent-driven edits. Clean buffers reload silently; dirty buffers show a "View diff" banner so you never lose in-progress work to an agent's overwrite.</p>
+        </div>
+        <div class="use">
+          <h3>SSH'd or battery-conscious laptops</h3>
+          <p>A 7.6 MB native binary that idles at near-zero CPU. No web stack, no GPU shaders running unprompted, no fans spinning up because of an Electron renderer.</p>
+        </div>
+        <div class="use">
+          <h3>Plain-text tasks</h3>
+          <p>Markdown, notes, drafts, dotfiles. <kbd>⌥⌘M</kbd> for live preview, word count in the status bar, sane defaults for prose.</p>
+        </div>
+        <div class="use">
+          <h3>Project-wide find &amp; replace</h3>
+          <p><kbd>⇧⌘F</kbd> searches every file in the workspace. Toggle <strong>Replace</strong> and it'll rewrite them all after a confirm step. Open tabs update in place.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-eyebrow">Get started</div>
+      <h2>Install in 30 seconds.</h2>
+
+      <div class="code-block">
+        <span class="code-lang">sh</span>
+        <button class="copy-btn" type="button" aria-label="Copy code">copy</button>
+        <pre><code class="language-sh">git clone https://github.com/MPJHorner/IdeUltra
 cd IdeUltra
 cargo run --release</code></pre>
+      </div>
 
-    <p style="margin-top:8px;color:var(--fg-dim);font-size:14px">
-      Part of the <strong>Ultra</strong> family —
-      <a href="https://mpjhorner.github.io/MailboxUltra/">MailboxUltra</a>,
-      <a href="https://mpjhorner.github.io/PostbinUltra/">PostbinUltra</a>.
-      Pure Rust + egui. Single ~7 MB binary. Zero telemetry. MIT.
-    </p>
-  </section>
+      <p>Or grab the pre-built universal <code>.dmg</code> from the <a href="https://github.com/MPJHorner/IdeUltra/releases/latest" rel="noopener noreferrer">latest release</a>. The first launch is blocked by Gatekeeper because the binary isn't notarised yet — <a href="/IdeUltra/install/">full install guide</a> covers the one-line <code>xattr</code> workaround and a manual build-from-source path.</p>
 
-  <h2>Why IdeUltra</h2>
-  <div class="features">
-    <div class="feature">
-      <h3>Snappy</h3>
-      <p>Cold start under 150ms. Keystroke-to-paint under 16ms. No web stack.</p>
-    </div>
-    <div class="feature">
-      <h3>Native</h3>
-      <p>Real macOS window, native folder pickers, native menu bar. No Electron, no webview.</p>
-    </div>
-    <div class="feature">
-      <h3>Local-first</h3>
-      <p>Files on disk. State in JSON. No cloud, no telemetry, no sign-in.</p>
-    </div>
-    <div class="feature">
-      <h3>Familiar</h3>
-      <p>File tree, tabs, find &amp; replace, syntax highlighting, light/dark. Just the basics, done well.</p>
-    </div>
-    <div class="feature">
-      <h3>Watchful</h3>
-      <p>External edits update clean buffers silently. Dirty buffers show a reload banner. Never overwrite by accident.</p>
-    </div>
-    <div class="feature">
-      <h3>Session-aware</h3>
-      <p>Quit and relaunch — your folder, tabs, theme, zoom and window all come back.</p>
-    </div>
-  </div>
-
-  <h2>30-second tour</h2>
-  <ol>
-    <li>Press <code>⇧⌘O</code> to open a folder.</li>
-    <li>Click a file in the sidebar. It opens in a tab. Click another file — second tab.</li>
-    <li>Type. Hit <code>⌘S</code>. The dot in the tab and window title disappears.</li>
-    <li>Press <code>⌘F</code> to find. <code>Enter</code> jumps to the next match. <code>⌥⌘F</code> for find &amp; replace.</li>
-    <li>Press <code>⌘G</code> to jump to a line. <code>⌘B</code> to toggle the sidebar.</li>
-    <li>Quit. Relaunch. Everything's back.</li>
-  </ol>
-
-  <h2>Use cases</h2>
-  <ul>
-    <li><strong>Quick edits without booting VS Code.</strong> Open a config file, tweak two lines, save, done.</li>
-    <li><strong>Reviewing a downloaded repo.</strong> Get instant syntax-highlighted browsing without indexing.</li>
-    <li><strong>Pairing with coding agents.</strong> Watch agent edits land in real time via the file watcher.</li>
-    <li><strong>SSH sessions and battery-conscious laptops.</strong> A 7 MB binary that doesn't fan-up your machine.</li>
-  </ul>
-
-  <h2>Status</h2>
-  <p>
-    <strong>v0.1.0</strong> — Initial MVP release. Ten deliverables (D1–D10), all shipped.
-    See the <a href="changelog.html">changelog</a> and the
-    <a href="https://github.com/MPJHorner/IdeUltra/blob/main/plan.md">build plan</a>.
-  </p>
-
-  <div class="callout">
-    <strong>macOS unsigned-app note:</strong> the v0.1.0 binary is not yet
-    notarised. On first launch macOS will refuse to open it; right-click
-    the app in Finder and choose <em>Open</em>, or run
-    <code>xattr -d com.apple.quarantine /Applications/IdeUltra.app</code>.
-  </div>
-
+      <div class="cta-card">
+        <div>
+          <h3>Read the full reference.</h3>
+          <p>Every shortcut, every preference, every command. Mobile-friendly, kept in sync with the code that ships.</p>
+        </div>
+        <div>
+          <a class="btn primary" href="/IdeUltra/quick-start/">Quick start</a>
+          <a class="btn ghost" href="/IdeUltra/shortcuts/">Shortcuts</a>
+        </div>
+      </div>
+    </section>
+  </article>
 </main>
 
-<footer class="site">
-  <a href="install.html">Install</a> ·
-  <a href="quickstart.html">Quick Start</a> ·
-  <a href="shortcuts.html">Shortcuts</a> ·
-  <a href="preferences.html">Preferences</a> ·
-  <a href="use-cases.html">Use Cases</a> ·
-  <a href="changelog.html">Changelog</a> ·
-  <a href="https://github.com/MPJHorner/IdeUltra">GitHub</a> ·
-  <a href="https://github.com/MPJHorner/IdeUltra/issues">Issues</a>
-  <br>
-  <span style="opacity:.7">MIT licensed · zero telemetry · part of the Ultra family</span>
+<footer class="footer" role="contentinfo">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="brand">
+        <svg class="brand-logo" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+          <defs><linearGradient id="footg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67E8F9"/><stop offset="1" stop-color="#2F80FF"/></linearGradient></defs>
+          <rect width="32" height="32" rx="7" fill="url(#footg)" opacity=".22"/>
+          <path d="M11.5 9 6 15.4v1.2L11.5 23l2-2-4.5-4.5L13 12.4 11.5 9Zm9 0-2 2L23 15.6l-4.5 4.5 2 2L26 16.6v-1.2L20.5 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+        </svg>
+        <span class="brand-name">Ide <span class="brand-mark">Ultra</span></span>
+      </div>
+      <p class="footer-tag">A snappy, native, local-first code IDE.</p>
+      <p class="footer-meta">MIT licensed. Built in Rust. Runs on your machine.</p>
+      <p class="footer-meta" style="margin-top:8px">Part of the Ultra family: <a href="https://mpjhorner.github.io/MailboxUltra/">MailboxUltra</a> · <a href="https://mpjhorner.github.io/PostbinUltra/">PostbinUltra</a> · <a href="https://mpjhorner.github.io/ScreenshotUltra/">ScreenshotUltra</a></p>
+    </div>
+
+    <nav class="footer-nav" aria-label="Documentation">
+      <h4>Docs</h4>
+      <ul>
+        <li><a href="/IdeUltra/install/">Install</a></li>
+        <li><a href="/IdeUltra/quick-start/">Quick start</a></li>
+        <li><a href="/IdeUltra/shortcuts/">Shortcuts</a></li>
+        <li><a href="/IdeUltra/preferences/">Preferences</a></li>
+        <li><a href="/IdeUltra/use-cases/">Use cases</a></li>
+        <li><a href="/IdeUltra/changelog/">Changelog</a></li>
+      </ul>
+    </nav>
+
+    <nav class="footer-nav" aria-label="Project">
+      <h4>Project</h4>
+      <ul>
+        <li><a href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">GitHub</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/releases/latest" rel="noopener noreferrer">Latest release</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/issues" rel="noopener noreferrer">Issues</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/blob/main/LICENSE" rel="noopener noreferrer">License</a></li>
+      </ul>
+    </nav>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 MPJHorner</span>
+    <span class="dot">·</span>
+    <a href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">github.com/MPJHorner/IdeUltra</a>
+  </div>
 </footer>
 
+<script src="/IdeUltra/theme.js" defer></script>
+<script src="/IdeUltra/copy.js" defer></script>
 </body>
 </html>

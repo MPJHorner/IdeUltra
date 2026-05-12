@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0a0d11" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+  <title>Preferences · IdeUltra</title>
+  <link rel="canonical" href="https://mpjhorner.github.io/IdeUltra/preferences/" />
+  <link rel="icon" href="/IdeUltra/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/IdeUltra/style.css" />
+  <script>(function(){try{const t=localStorage.getItem('ide-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/IdeUltra/" aria-label="IdeUltra home">
+      <svg class="brand-logo" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+        <defs><linearGradient id="navg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67E8F9"/><stop offset="1" stop-color="#2F80FF"/></linearGradient></defs>
+        <rect width="32" height="32" rx="7" fill="url(#navg)" opacity=".22"/>
+        <path d="M11.5 9 6 15.4v1.2L11.5 23l2-2-4.5-4.5L13 12.4 11.5 9Zm9 0-2 2L23 15.6l-4.5 4.5 2 2L26 16.6v-1.2L20.5 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">Ide <span class="brand-mark">Ultra</span></span>
+    </a>
+    <nav class="primary-nav" aria-label="Primary">
+      <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-list" aria-label="Toggle navigation">
+        <span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span>
+      </button>
+      <div class="nav-list" id="nav-list">
+        <a class="nav-link" href="/IdeUltra/install/">Install</a>
+        <a class="nav-link" href="/IdeUltra/quick-start/">Quick start</a>
+        <a class="nav-link" href="/IdeUltra/shortcuts/">Shortcuts</a>
+        <a class="nav-link active" href="/IdeUltra/preferences/">Preferences</a>
+        <a class="nav-link" href="/IdeUltra/changelog/">Changelog</a>
+        <div class="nav-actions">
+          <button class="icon-btn theme-toggle" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5a6.5 6.5 0 1 0 6.4 5.4 5.5 5.5 0 0 1-6.9-6.9A6.6 6.6 0 0 0 8 1.5Z"/></svg>
+          </button>
+          <a class="icon-btn github-link" href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.51-1.08-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.21-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.92.08 2.13.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+  <article class="prose">
+    <h1>Preferences</h1>
+    <p>Press <kbd>⌘,</kbd> for the in-app Preferences window. Everything also lives in a small JSON file under <code>~/Library/Application Support/com.mpjhorner.IdeUltra/</code>. Edit either; both round-trip through the same data model.</p>
+
+    <h2>settings.json</h2>
+    <p>User-tunable preferences. Survives across sessions, never touched during normal editing.</p>
+
+    <div class="code-block">
+      <span class="code-lang">json</span>
+      <button class="copy-btn" type="button" aria-label="Copy code">copy</button>
+      <pre><code class="language-json">{
+  "theme": "Dark",
+  "zoom": 1.0,
+  "sidebar_width": 260.0,
+  "sidebar_visible": true,
+  "markdown_preview": true,
+  "autosave_on_focus_loss": true,
+  "keymap_preset": "Default",
+  "keymap_chosen": true,
+  "trim_trailing_whitespace_on_save": true,
+  "ensure_final_newline_on_save": true,
+  "indent_style": { "Spaces": 4 },
+  "soft_wrap": false
+}</code></pre>
+    </div>
+
+    <div class="table-wrap"><table>
+      <thead><tr><th>Key</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>theme</code></td><td><code>"Dark"</code> or <code>"Light"</code></td><td>Use <strong>View → Theme</strong> in the app.</td></tr>
+        <tr><td><code>zoom</code></td><td>float, 0.5–3.0</td><td>Use <kbd>⌘=</kbd> / <kbd>⌘-</kbd> / <kbd>⌘0</kbd>.</td></tr>
+        <tr><td><code>sidebar_width</code></td><td>float, ≥220</td><td>Drag the splitter between sidebar and editor.</td></tr>
+        <tr><td><code>sidebar_visible</code></td><td>bool</td><td><kbd>⌘B</kbd> toggles.</td></tr>
+        <tr><td><code>markdown_preview</code></td><td>bool</td><td><kbd>⌥⌘M</kbd> toggles when the active tab is a <code>.md</code> file.</td></tr>
+        <tr><td><code>autosave_on_focus_loss</code></td><td>bool</td><td>Save every dirty buffer when the window loses focus.</td></tr>
+        <tr><td><code>keymap_preset</code></td><td><code>"Default"</code>, <code>"VsCode"</code>, <code>"PhpStorm"</code></td><td>Welcome modal asks; <strong>Edit → Keymap</strong> switches.</td></tr>
+        <tr><td><code>keymap_chosen</code></td><td>bool</td><td>If false, the welcome modal shows on next launch.</td></tr>
+        <tr><td><code>trim_trailing_whitespace_on_save</code></td><td>bool</td><td>Strips spaces/tabs/CR at end of each line before write.</td></tr>
+        <tr><td><code>ensure_final_newline_on_save</code></td><td>bool</td><td>Appends a final <code>\n</code> if the buffer doesn't end with one.</td></tr>
+        <tr><td><code>indent_style</code></td><td><code>"Tab"</code> or <code>{ "Spaces": n }</code></td><td>Multi-line Tab/Shift+Tab uses this unit.</td></tr>
+        <tr><td><code>soft_wrap</code></td><td>bool</td><td>Wrap long lines in the editor.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>session.json</h2>
+    <p>What you had open when you last quit. Restored on relaunch.</p>
+
+    <div class="code-block">
+      <span class="code-lang">json</span>
+      <button class="copy-btn" type="button" aria-label="Copy code">copy</button>
+      <pre><code class="language-json">{
+  "window": { "size": [1400, 900], "pos": [200, 100] },
+  "last_folder": "/Users/you/work/myproject",
+  "open_tabs": [
+    "/Users/you/work/myproject/src/main.rs",
+    "/Users/you/work/myproject/Cargo.toml"
+  ],
+  "active_tab": 1,
+  "recent_files": { "entries": [] },
+  "pane2_active": null,
+  "focused_right": false
+}</code></pre>
+    </div>
+
+    <p>Hand-edit either file (close IdeUltra first) and the next launch picks up the change. Both files are written atomically (<code>.tmp</code> + rename), so an interrupted save can't corrupt them.</p>
+
+    <h2>Recovery</h2>
+    <p>Every dirty buffer is snapshotted to <code>~/Library/Application Support/com.mpjhorner.IdeUltra/recovery/</code> on a one-second debounce. Each snapshot is a pair: <code>&lt;hash&gt;.json</code> with metadata + <code>&lt;hash&gt;.txt</code> with the contents.</p>
+    <p>On normal save the snapshot is dropped. On startup, any recoveries whose original file is older than the snapshot are surfaced in a modal. Recoveries whose original has been saved through some other route are silently cleaned up.</p>
+
+    <h2>Logs</h2>
+    <p><code>log.ndjson</code> in the same directory. One JSON object per line. Tail it for live diagnostics:</p>
+
+    <div class="code-block">
+      <span class="code-lang">sh</span>
+      <button class="copy-btn" type="button" aria-label="Copy code">copy</button>
+      <pre><code class="language-sh">tail -f ~/Library/Application\ Support/com.mpjhorner.IdeUltra/log.ndjson</code></pre>
+    </div>
+
+    <p>The log includes cold-start timing, every workspace open, every file open and save, git refreshes, recovery scans, fuzzy-find query telemetry, and any warnings (failed reload, save errors, missing tabs on restore).</p>
+  </article>
+</main>
+
+<footer class="footer" role="contentinfo">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="brand">
+        <svg class="brand-logo" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+          <defs><linearGradient id="footg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67E8F9"/><stop offset="1" stop-color="#2F80FF"/></linearGradient></defs>
+          <rect width="32" height="32" rx="7" fill="url(#footg)" opacity=".22"/>
+          <path d="M11.5 9 6 15.4v1.2L11.5 23l2-2-4.5-4.5L13 12.4 11.5 9Zm9 0-2 2L23 15.6l-4.5 4.5 2 2L26 16.6v-1.2L20.5 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+        </svg>
+        <span class="brand-name">Ide <span class="brand-mark">Ultra</span></span>
+      </div>
+      <p class="footer-tag">A snappy, native, local-first code IDE.</p>
+      <p class="footer-meta">MIT licensed. Built in Rust. Runs on your machine.</p>
+    </div>
+    <nav class="footer-nav" aria-label="Documentation">
+      <h4>Docs</h4>
+      <ul>
+        <li><a href="/IdeUltra/install/">Install</a></li>
+        <li><a href="/IdeUltra/quick-start/">Quick start</a></li>
+        <li><a href="/IdeUltra/shortcuts/">Shortcuts</a></li>
+        <li><a href="/IdeUltra/preferences/">Preferences</a></li>
+        <li><a href="/IdeUltra/use-cases/">Use cases</a></li>
+        <li><a href="/IdeUltra/changelog/">Changelog</a></li>
+      </ul>
+    </nav>
+    <nav class="footer-nav" aria-label="Project">
+      <h4>Project</h4>
+      <ul>
+        <li><a href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">GitHub</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/releases/latest" rel="noopener noreferrer">Latest release</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/issues" rel="noopener noreferrer">Issues</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/blob/main/LICENSE" rel="noopener noreferrer">License</a></li>
+      </ul>
+    </nav>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 MPJHorner</span>
+    <span class="dot">·</span>
+    <a href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">github.com/MPJHorner/IdeUltra</a>
+  </div>
+</footer>
+
+<script src="/IdeUltra/theme.js" defer></script>
+<script src="/IdeUltra/copy.js" defer></script>
+</body>
+</html>

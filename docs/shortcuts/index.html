@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0a0d11" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+  <title>Shortcuts · IdeUltra</title>
+  <link rel="canonical" href="https://mpjhorner.github.io/IdeUltra/shortcuts/" />
+  <link rel="icon" href="/IdeUltra/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/IdeUltra/style.css" />
+  <script>(function(){try{const t=localStorage.getItem('ide-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/IdeUltra/" aria-label="IdeUltra home">
+      <svg class="brand-logo" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+        <defs><linearGradient id="navg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67E8F9"/><stop offset="1" stop-color="#2F80FF"/></linearGradient></defs>
+        <rect width="32" height="32" rx="7" fill="url(#navg)" opacity=".22"/>
+        <path d="M11.5 9 6 15.4v1.2L11.5 23l2-2-4.5-4.5L13 12.4 11.5 9Zm9 0-2 2L23 15.6l-4.5 4.5 2 2L26 16.6v-1.2L20.5 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">Ide <span class="brand-mark">Ultra</span></span>
+    </a>
+    <nav class="primary-nav" aria-label="Primary">
+      <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-list" aria-label="Toggle navigation">
+        <span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span>
+      </button>
+      <div class="nav-list" id="nav-list">
+        <a class="nav-link" href="/IdeUltra/install/">Install</a>
+        <a class="nav-link" href="/IdeUltra/quick-start/">Quick start</a>
+        <a class="nav-link active" href="/IdeUltra/shortcuts/">Shortcuts</a>
+        <a class="nav-link" href="/IdeUltra/preferences/">Preferences</a>
+        <a class="nav-link" href="/IdeUltra/changelog/">Changelog</a>
+        <div class="nav-actions">
+          <button class="icon-btn theme-toggle" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5a6.5 6.5 0 1 0 6.4 5.4 5.5 5.5 0 0 1-6.9-6.9A6.6 6.6 0 0 0 8 1.5Z"/></svg>
+          </button>
+          <a class="icon-btn github-link" href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.51-1.08-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.21-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.92.08 2.13.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+  <article class="prose">
+    <h1>Shortcuts</h1>
+    <p>Every binding. Keymap preset chosen on first launch (or via <strong>Edit → Keymap</strong>) decides which combinations apply to the entries marked <em>varies</em>; the defaults shown below are the IdeUltra preset.</p>
+
+    <h2>Files</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>⌘O</kbd></td><td>Open file</td></tr>
+        <tr><td><kbd>⇧⌘O</kbd></td><td>Open folder</td></tr>
+        <tr><td><kbd>⌘S</kbd></td><td>Save active tab</td></tr>
+        <tr><td><kbd>⌘W</kbd></td><td>Close active tab (prompts if dirty)</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>Tabs</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>⌘[</kbd> / <kbd>⌘]</kbd></td><td>Previous / next tab</td></tr>
+        <tr><td><kbd>⌘1</kbd>…<kbd>⌘9</kbd></td><td>Jump to tab N</td></tr>
+        <tr><td><kbd>⌃Tab</kbd></td><td>Quick-switch recent tabs (hold ⌃, release to switch)</td></tr>
+        <tr><td><kbd>⇧⌃Tab</kbd></td><td>Quick-switch backwards</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>Find &amp; replace</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>⌘F</kbd></td><td>Open find bar</td></tr>
+        <tr><td><kbd>⌥⌘F</kbd></td><td>Open find &amp; replace <em>(varies — ⌘R on PhpStorm preset)</em></td></tr>
+        <tr><td><kbd>⇧⌘F</kbd></td><td>Search across the project</td></tr>
+        <tr><td><kbd>⌘D</kbd></td><td>Select word at cursor / next occurrence</td></tr>
+        <tr><td><kbd>Enter</kbd> / <kbd>⇧Enter</kbd></td><td>Next / previous match</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close find bar</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>Editing</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>⌘/</kbd></td><td>Toggle line comment</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Indent (multi-line selection) or insert tab (single caret)</td></tr>
+        <tr><td><kbd>⇧Tab</kbd></td><td>Dedent multi-line selection</td></tr>
+        <tr><td>type <kbd>(</kbd> / <kbd>[</kbd> / <kbd>{</kbd> / <kbd>"</kbd> / <kbd>'</kbd> / <kbd>`</kbd></td><td>Auto-pair (cursor parks between the pair)</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>Navigation</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>⌘P</kbd></td><td>Go to file (fuzzy finder) <em>(varies — ⇧⌘O on PhpStorm)</em></td></tr>
+        <tr><td><kbd>⇧⌘P</kbd></td><td>Command palette</td></tr>
+        <tr><td><kbd>⌘G</kbd></td><td>Go to line <em>(varies — ⌃G on VS Code, ⌘L on PhpStorm)</em></td></tr>
+        <tr><td><kbd>⌘B</kbd></td><td>Toggle sidebar</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>View</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>⌘=</kbd></td><td>Zoom in</td></tr>
+        <tr><td><kbd>⌘-</kbd></td><td>Zoom out</td></tr>
+        <tr><td><kbd>⌘0</kbd></td><td>Reset zoom</td></tr>
+        <tr><td><kbd>⌥⌘M</kbd></td><td>Toggle markdown preview</td></tr>
+        <tr><td><kbd>⌘\</kbd></td><td>Toggle split editor</td></tr>
+        <tr><td><kbd>⌘,</kbd></td><td>Open Preferences</td></tr>
+      </tbody>
+    </table></div>
+  </article>
+</main>
+
+<footer class="footer" role="contentinfo">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="brand">
+        <svg class="brand-logo" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+          <defs><linearGradient id="footg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67E8F9"/><stop offset="1" stop-color="#2F80FF"/></linearGradient></defs>
+          <rect width="32" height="32" rx="7" fill="url(#footg)" opacity=".22"/>
+          <path d="M11.5 9 6 15.4v1.2L11.5 23l2-2-4.5-4.5L13 12.4 11.5 9Zm9 0-2 2L23 15.6l-4.5 4.5 2 2L26 16.6v-1.2L20.5 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+        </svg>
+        <span class="brand-name">Ide <span class="brand-mark">Ultra</span></span>
+      </div>
+      <p class="footer-tag">A snappy, native, local-first code IDE.</p>
+      <p class="footer-meta">MIT licensed. Built in Rust. Runs on your machine.</p>
+    </div>
+    <nav class="footer-nav" aria-label="Documentation">
+      <h4>Docs</h4>
+      <ul>
+        <li><a href="/IdeUltra/install/">Install</a></li>
+        <li><a href="/IdeUltra/quick-start/">Quick start</a></li>
+        <li><a href="/IdeUltra/shortcuts/">Shortcuts</a></li>
+        <li><a href="/IdeUltra/preferences/">Preferences</a></li>
+        <li><a href="/IdeUltra/use-cases/">Use cases</a></li>
+        <li><a href="/IdeUltra/changelog/">Changelog</a></li>
+      </ul>
+    </nav>
+    <nav class="footer-nav" aria-label="Project">
+      <h4>Project</h4>
+      <ul>
+        <li><a href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">GitHub</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/releases/latest" rel="noopener noreferrer">Latest release</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/issues" rel="noopener noreferrer">Issues</a></li>
+        <li><a href="https://github.com/MPJHorner/IdeUltra/blob/main/LICENSE" rel="noopener noreferrer">License</a></li>
+      </ul>
+    </nav>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 MPJHorner</span>
+    <span class="dot">·</span>
+    <a href="https://github.com/MPJHorner/IdeUltra" rel="noopener noreferrer">github.com/MPJHorner/IdeUltra</a>
+  </div>
+</footer>
+
+<script src="/IdeUltra/theme.js" defer></script>
+<script src="/IdeUltra/copy.js" defer></script>
+</body>
+</html>
