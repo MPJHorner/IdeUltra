@@ -1,16 +1,20 @@
-//! Centralised design tokens and egui visuals.
+//! Design tokens and egui visuals for IdeUltra.
 //!
-//! This file is the runtime expression of [`STYLE_GUIDE.md`](../../STYLE_GUIDE.md).
-//! Every UI surface should read its colors, spacing, radii, and shadows
-//! from here — never from hard-coded hex literals scattered through the
-//! widget code.
+//! IdeUltra's house style is "**luxury light**" — white and light grey
+//! surfaces, deep-ink accent, almost-invisible chrome, generous
+//! whitespace, no neon. Reference points: Linear light, Vercel Geist
+//! light, Stripe docs, iA Writer. The visual answer to "what does a
+//! 2026 code editor look like when it isn't trying to look like a
+//! 2010 code editor?"
+//!
+//! Light is the default. Dark is the refined "night mode" complement —
+//! charcoal/zinc rather than indigo, equally restrained.
 //!
 //! Two public entry points:
 //!
-//!   1. [`tokens(theme)`] — returns the semantic [`Tokens`] for the
-//!      requested theme. Cheap (returns a `&'static` reference).
-//!   2. [`apply(ctx, theme)`] — walks the tokens and configures egui's
-//!      `Visuals` + `Style::spacing` so built-in widgets render to spec.
+//!   1. [`tokens(theme)`] — semantic tokens (`&'static Tokens`).
+//!   2. [`apply(ctx, theme)`] — wire those tokens into egui's
+//!      `Visuals` + `Style::spacing`.
 
 use egui::epaint::Shadow;
 use egui::{Color32, Context, Rounding, Stroke, Visuals};
@@ -22,19 +26,9 @@ use crate::editor::language::ColorTheme;
 // Token type
 // ───────────────────────────────────────────────────────────────────────
 
-/// All design tokens, resolved for one theme.
-///
-/// Member names map directly to STYLE_GUIDE.md §2. Add new tokens here
-/// only when the style guide gains a new entry — keep guide and code in
-/// lock-step.
-///
-/// `#[allow(dead_code)]` is intentional: every field is a public surface
-/// that downstream UI files may use. Many are consumed today; a few
-/// (notably the VCS palette beyond modified/added/deleted) await the
-/// features they belong to.
 #[allow(dead_code)]
 pub struct Tokens {
-    // surfaces (dark → light layering)
+    // surface ramp
     pub bg_canvas: Color32,
     pub bg_chrome: Color32,
     pub bg_surface: Color32,
@@ -56,13 +50,13 @@ pub struct Tokens {
     pub border_default: Color32,
     pub border_strong: Color32,
 
-    // accent
+    // accent — deep-ink charcoal in light, soft ivory in dark
     pub accent: Color32,
     pub accent_hover: Color32,
     pub accent_bg: Color32,
     pub accent_border: Color32,
 
-    // semantic status
+    // semantic status (deep / muted, not neon)
     pub error: Color32,
     pub error_bg: Color32,
     pub error_border: Color32,
@@ -90,11 +84,9 @@ pub struct Tokens {
     pub shadow_md: Shadow,
     pub shadow_lg: Shadow,
 
-    // theme flag — handy for branches that depend on light vs dark
     pub is_dark: bool,
 }
 
-/// Spacing tokens (4 px grid).
 #[allow(dead_code)]
 pub mod space {
     pub const S1: f32 = 4.0;
@@ -109,7 +101,6 @@ pub mod space {
     pub const S16: f32 = 64.0;
 }
 
-/// Radii tokens.
 #[allow(dead_code)]
 pub mod radii {
     pub const XS: f32 = 4.0;
@@ -119,7 +110,6 @@ pub mod radii {
     pub const XL: f32 = 14.0;
 }
 
-/// Type-scale tokens in px.
 #[allow(dead_code)]
 pub mod ts {
     pub const CAPTION: f32 = 11.0;
@@ -139,153 +129,168 @@ pub mod ts {
 // Token constructors
 // ───────────────────────────────────────────────────────────────────────
 
-static DARK: Lazy<Tokens> = Lazy::new(dark_tokens);
 static LIGHT: Lazy<Tokens> = Lazy::new(light_tokens);
+static DARK: Lazy<Tokens> = Lazy::new(dark_tokens);
 
 pub fn tokens(theme: ColorTheme) -> &'static Tokens {
     match theme {
-        ColorTheme::Dark => &DARK,
         ColorTheme::Light => &LIGHT,
+        ColorTheme::Dark => &DARK,
     }
 }
 
-fn dark_tokens() -> Tokens {
+/// LUXURY LIGHT — the hero theme.
+///
+/// White editor canvas, near-white panels, ink-charcoal text, deep-ink
+/// accent (looks black until you put it next to true black). Almost
+/// invisible borders, near-zero shadows. The code carries the color.
+fn light_tokens() -> Tokens {
     Tokens {
-        bg_canvas: Color32::from_rgb(0x0F, 0x11, 0x16),
-        bg_chrome: Color32::from_rgb(0x13, 0x16, 0x1D),
-        bg_surface: Color32::from_rgb(0x19, 0x1D, 0x26),
-        bg_elevated: Color32::from_rgb(0x1F, 0x24, 0x30),
-        bg_modal: Color32::from_rgb(0x22, 0x28, 0x3A),
-        bg_subtle: Color32::from_rgba_premultiplied(8, 8, 8, 8), // ~3%α white tint approx
-        bg_hover: Color32::from_rgba_premultiplied(10, 10, 10, 10), // ~4%α
-        bg_active: Color32::from_rgba_premultiplied(20, 20, 20, 20), // ~8%α
+        // surface ramp — purposely tiny lightness deltas
+        bg_canvas: Color32::WHITE,                       // editor
+        bg_chrome: Color32::from_rgb(0xFB, 0xFB, 0xFC),  // sidebar, status bar
+        bg_surface: Color32::from_rgb(0xF5, 0xF5, 0xF7), // find bar, tabs strip
+        bg_elevated: Color32::WHITE,                     // popovers
+        bg_modal: Color32::WHITE,                        // modals
+        bg_subtle: Color32::from_rgba_premultiplied(0, 0, 0, 5),
+        bg_hover: Color32::from_rgba_premultiplied(0, 0, 0, 8),
+        bg_active: Color32::from_rgba_premultiplied(0, 0, 0, 14),
 
-        text_primary: Color32::from_rgb(0xE6, 0xE8, 0xEC),
-        text_secondary: Color32::from_rgb(0xA8, 0xAD, 0xB8),
-        text_muted: Color32::from_rgb(0x6E, 0x73, 0x7D),
-        text_disabled: Color32::from_rgb(0x4A, 0x4E, 0x58),
-        text_on_accent: Color32::from_rgb(0x04, 0x10, 0x1F),
+        // foreground — deep ink, never pure black (saves the eyes on white)
+        text_primary: Color32::from_rgb(0x0A, 0x0A, 0x0A),
+        text_secondary: Color32::from_rgb(0x44, 0x44, 0x48),
+        text_muted: Color32::from_rgb(0x88, 0x88, 0x92),
+        text_disabled: Color32::from_rgb(0xC0, 0xC0, 0xC6),
+        text_on_accent: Color32::WHITE,
 
-        border_subtle: Color32::from_rgba_premultiplied(15, 15, 15, 15),
-        border_default: Color32::from_rgba_premultiplied(25, 25, 25, 25),
-        border_strong: Color32::from_rgba_premultiplied(40, 40, 40, 40),
+        // borders — barely there
+        border_subtle: Color32::from_rgba_premultiplied(0, 0, 0, 10),
+        border_default: Color32::from_rgba_premultiplied(0, 0, 0, 18),
+        border_strong: Color32::from_rgba_premultiplied(0, 0, 0, 32),
 
-        accent: Color32::from_rgb(0x7A, 0xA2, 0xF7),
-        accent_hover: Color32::from_rgb(0x8F, 0xB3, 0xF9),
-        accent_bg: Color32::from_rgba_premultiplied(15, 19, 30, 30),
-        accent_border: Color32::from_rgba_premultiplied(36, 49, 75, 75),
+        // accent — deep ink. Reads as "really nice black" against #FFF.
+        accent: Color32::from_rgb(0x18, 0x18, 0x1B),
+        accent_hover: Color32::from_rgb(0x27, 0x27, 0x2A),
+        accent_bg: Color32::from_rgba_premultiplied(0, 0, 0, 8),
+        accent_border: Color32::from_rgba_premultiplied(0, 0, 0, 28),
 
-        error: Color32::from_rgb(0xE5, 0x48, 0x4D),
-        error_bg: Color32::from_rgba_premultiplied(23, 7, 8, 26),
-        error_border: Color32::from_rgba_premultiplied(57, 18, 19, 64),
-        warning: Color32::from_rgb(0xF5, 0xA5, 0x24),
-        warning_bg: Color32::from_rgba_premultiplied(24, 17, 4, 26),
-        warning_border: Color32::from_rgba_premultiplied(61, 41, 9, 64),
-        success: Color32::from_rgb(0x46, 0xA7, 0x58),
-        success_bg: Color32::from_rgba_premultiplied(7, 17, 9, 26),
-        success_border: Color32::from_rgba_premultiplied(17, 42, 22, 64),
-        info: Color32::from_rgb(0x5E, 0xB1, 0xF0),
-        info_bg: Color32::from_rgba_premultiplied(9, 18, 24, 26),
-        info_border: Color32::from_rgba_premultiplied(23, 44, 60, 64),
+        // semantic status — deep, never saturated
+        error: Color32::from_rgb(0xB9, 0x1C, 0x1C),
+        error_bg: Color32::from_rgba_premultiplied(15, 2, 2, 18),
+        error_border: Color32::from_rgba_premultiplied(50, 8, 8, 50),
+        warning: Color32::from_rgb(0xB4, 0x53, 0x09),
+        warning_bg: Color32::from_rgba_premultiplied(15, 7, 1, 18),
+        warning_border: Color32::from_rgba_premultiplied(50, 23, 4, 50),
+        success: Color32::from_rgb(0x15, 0x80, 0x3D),
+        success_bg: Color32::from_rgba_premultiplied(2, 11, 5, 18),
+        success_border: Color32::from_rgba_premultiplied(6, 34, 16, 50),
+        info: Color32::from_rgb(0x1D, 0x4E, 0xD8),
+        info_bg: Color32::from_rgba_premultiplied(3, 7, 19, 18),
+        info_border: Color32::from_rgba_premultiplied(8, 21, 55, 50),
 
-        vcs_added: Color32::from_rgb(0x27, 0xA6, 0x57),
-        vcs_modified: Color32::from_rgb(0xD3, 0xB0, 0x20),
-        vcs_deleted: Color32::from_rgb(0xE0, 0x6C, 0x76),
-        vcs_renamed: Color32::from_rgb(0xB0, 0x83, 0xDA),
-        vcs_untracked: Color32::from_rgb(0x5E, 0xB1, 0xF0),
-        vcs_conflict: Color32::from_rgb(0xFF, 0x6B, 0x6B),
-        vcs_ignored: Color32::from_rgb(0x78, 0x78, 0x78),
+        // vcs — slightly more vivid than status (gutters need to read)
+        vcs_added: Color32::from_rgb(0x15, 0x80, 0x3D),
+        vcs_modified: Color32::from_rgb(0xA1, 0x6A, 0x05),
+        vcs_deleted: Color32::from_rgb(0xB9, 0x1C, 0x1C),
+        vcs_renamed: Color32::from_rgb(0x68, 0x3F, 0xB6),
+        vcs_untracked: Color32::from_rgb(0x1D, 0x4E, 0xD8),
+        vcs_conflict: Color32::from_rgb(0xB9, 0x1C, 0x1C),
+        vcs_ignored: Color32::from_rgb(0x9A, 0x9A, 0xA0),
 
+        // elevation — soft, almost imperceptible
         shadow_sm: Shadow {
             offset: egui::vec2(0.0, 1.0),
-            blur: 2.0,
+            blur: 1.0,
             spread: 0.0,
-            color: Color32::from_black_alpha(100),
+            color: Color32::from_black_alpha(8),
         },
         shadow_md: Shadow {
             offset: egui::vec2(0.0, 4.0),
             blur: 12.0,
             spread: 0.0,
-            color: Color32::from_black_alpha(90),
+            color: Color32::from_black_alpha(14),
         },
         shadow_lg: Shadow {
-            offset: egui::vec2(0.0, 16.0),
+            offset: egui::vec2(0.0, 14.0),
             blur: 40.0,
             spread: 0.0,
-            color: Color32::from_black_alpha(115),
+            color: Color32::from_black_alpha(22),
         },
 
-        is_dark: true,
+        is_dark: false,
     }
 }
 
-fn light_tokens() -> Tokens {
+/// Dark — refined charcoal/zinc complement. Designed to feel like the
+/// same product at night, not a different app.
+fn dark_tokens() -> Tokens {
     Tokens {
-        bg_canvas: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-        bg_chrome: Color32::from_rgb(0xFA, 0xFB, 0xFC),
-        bg_surface: Color32::from_rgb(0xF4, 0xF5, 0xF8),
-        bg_elevated: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-        bg_modal: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-        bg_subtle: Color32::from_rgba_premultiplied(0, 0, 0, 6),
-        bg_hover: Color32::from_rgba_premultiplied(0, 0, 0, 10),
-        bg_active: Color32::from_rgba_premultiplied(0, 0, 0, 18),
+        bg_canvas: Color32::from_rgb(0x0B, 0x0B, 0x0D),
+        bg_chrome: Color32::from_rgb(0x10, 0x10, 0x12),
+        bg_surface: Color32::from_rgb(0x16, 0x16, 0x19),
+        bg_elevated: Color32::from_rgb(0x1B, 0x1B, 0x1E),
+        bg_modal: Color32::from_rgb(0x1E, 0x1E, 0x22),
+        bg_subtle: Color32::from_rgba_premultiplied(8, 8, 8, 8),
+        bg_hover: Color32::from_rgba_premultiplied(12, 12, 12, 12),
+        bg_active: Color32::from_rgba_premultiplied(22, 22, 22, 22),
 
-        text_primary: Color32::from_rgb(0x0E, 0x11, 0x17),
-        text_secondary: Color32::from_rgb(0x47, 0x55, 0x69),
-        text_muted: Color32::from_rgb(0x7A, 0x84, 0x93),
-        text_disabled: Color32::from_rgb(0xB7, 0xBF, 0xC9),
-        text_on_accent: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+        text_primary: Color32::from_rgb(0xF0, 0xF0, 0xF2),
+        text_secondary: Color32::from_rgb(0xAE, 0xAE, 0xB2),
+        text_muted: Color32::from_rgb(0x72, 0x72, 0x76),
+        text_disabled: Color32::from_rgb(0x48, 0x48, 0x4C),
+        text_on_accent: Color32::from_rgb(0x0B, 0x0B, 0x0D),
 
-        border_subtle: Color32::from_rgba_premultiplied(0, 0, 0, 16),
-        border_default: Color32::from_rgba_premultiplied(0, 0, 0, 26),
-        border_strong: Color32::from_rgba_premultiplied(0, 0, 0, 42),
+        border_subtle: Color32::from_rgba_premultiplied(18, 18, 18, 18),
+        border_default: Color32::from_rgba_premultiplied(32, 32, 32, 32),
+        border_strong: Color32::from_rgba_premultiplied(58, 58, 58, 58),
 
-        accent: Color32::from_rgb(0x3B, 0x82, 0xF6),
-        accent_hover: Color32::from_rgb(0x25, 0x63, 0xEB),
-        accent_bg: Color32::from_rgba_premultiplied(6, 13, 26, 26),
-        accent_border: Color32::from_rgba_premultiplied(18, 39, 74, 77),
+        // ivory accent — looks white against zinc backgrounds
+        accent: Color32::from_rgb(0xF4, 0xF4, 0xF6),
+        accent_hover: Color32::WHITE,
+        accent_bg: Color32::from_rgba_premultiplied(28, 28, 28, 28),
+        accent_border: Color32::from_rgba_premultiplied(80, 80, 80, 80),
 
-        error: Color32::from_rgb(0xDC, 0x26, 0x26),
-        error_bg: Color32::from_rgba_premultiplied(22, 4, 4, 26),
-        error_border: Color32::from_rgba_premultiplied(55, 10, 10, 64),
-        warning: Color32::from_rgb(0xD9, 0x77, 0x06),
-        warning_bg: Color32::from_rgba_premultiplied(22, 12, 1, 26),
-        warning_border: Color32::from_rgba_premultiplied(54, 30, 2, 64),
-        success: Color32::from_rgb(0x05, 0x96, 0x69),
-        success_bg: Color32::from_rgba_premultiplied(0, 15, 11, 26),
-        success_border: Color32::from_rgba_premultiplied(1, 38, 27, 64),
-        info: Color32::from_rgb(0x09, 0x69, 0xDA),
-        info_bg: Color32::from_rgba_premultiplied(1, 11, 22, 26),
-        info_border: Color32::from_rgba_premultiplied(2, 26, 55, 64),
+        error: Color32::from_rgb(0xF2, 0x67, 0x6C),
+        error_bg: Color32::from_rgba_premultiplied(28, 11, 12, 30),
+        error_border: Color32::from_rgba_premultiplied(80, 32, 34, 80),
+        warning: Color32::from_rgb(0xF4, 0xB5, 0x4A),
+        warning_bg: Color32::from_rgba_premultiplied(28, 19, 7, 30),
+        warning_border: Color32::from_rgba_premultiplied(80, 56, 22, 80),
+        success: Color32::from_rgb(0x6E, 0xCC, 0x84),
+        success_bg: Color32::from_rgba_premultiplied(10, 22, 13, 30),
+        success_border: Color32::from_rgba_premultiplied(30, 66, 38, 80),
+        info: Color32::from_rgb(0x6E, 0xA8, 0xF7),
+        info_bg: Color32::from_rgba_premultiplied(10, 17, 28, 30),
+        info_border: Color32::from_rgba_premultiplied(30, 52, 82, 80),
 
-        vcs_added: Color32::from_rgb(0x16, 0x80, 0x3D),
-        vcs_modified: Color32::from_rgb(0xB1, 0x83, 0x00),
-        vcs_deleted: Color32::from_rgb(0xC0, 0x36, 0x3F),
-        vcs_renamed: Color32::from_rgb(0x80, 0x52, 0xCC),
-        vcs_untracked: Color32::from_rgb(0x09, 0x69, 0xDA),
-        vcs_conflict: Color32::from_rgb(0xDC, 0x26, 0x26),
-        vcs_ignored: Color32::from_rgb(0x98, 0x98, 0x98),
+        vcs_added: Color32::from_rgb(0x6E, 0xCC, 0x84),
+        vcs_modified: Color32::from_rgb(0xE3, 0xC0, 0x60),
+        vcs_deleted: Color32::from_rgb(0xF2, 0x67, 0x6C),
+        vcs_renamed: Color32::from_rgb(0xC1, 0x9F, 0xF0),
+        vcs_untracked: Color32::from_rgb(0x6E, 0xA8, 0xF7),
+        vcs_conflict: Color32::from_rgb(0xFF, 0x6F, 0x6F),
+        vcs_ignored: Color32::from_rgb(0x66, 0x66, 0x6A),
 
         shadow_sm: Shadow {
             offset: egui::vec2(0.0, 1.0),
             blur: 2.0,
             spread: 0.0,
-            color: Color32::from_black_alpha(15),
+            color: Color32::from_black_alpha(80),
         },
         shadow_md: Shadow {
             offset: egui::vec2(0.0, 4.0),
             blur: 14.0,
             spread: 0.0,
-            color: Color32::from_black_alpha(25),
+            color: Color32::from_black_alpha(75),
         },
         shadow_lg: Shadow {
             offset: egui::vec2(0.0, 18.0),
-            blur: 50.0,
+            blur: 48.0,
             spread: 0.0,
-            color: Color32::from_black_alpha(45),
+            color: Color32::from_black_alpha(100),
         },
 
-        is_dark: false,
+        is_dark: true,
     }
 }
 
@@ -293,11 +298,13 @@ fn light_tokens() -> Tokens {
 // egui apply
 // ───────────────────────────────────────────────────────────────────────
 
-/// Configure egui's `Visuals` + `Style::spacing` from the active tokens.
-/// Call once per frame after the theme is determined.
 pub fn apply(ctx: &Context, theme: ColorTheme) {
     let t = tokens(theme);
-    let mut v = if t.is_dark { Visuals::dark() } else { Visuals::light() };
+    let mut v = if t.is_dark {
+        Visuals::dark()
+    } else {
+        Visuals::light()
+    };
 
     v.dark_mode = t.is_dark;
     v.panel_fill = t.bg_chrome;
@@ -307,22 +314,15 @@ pub fn apply(ctx: &Context, theme: ColorTheme) {
     v.window_shadow = t.shadow_lg;
     v.popup_shadow = t.shadow_md;
     v.menu_rounding = Rounding::same(radii::MD);
-    v.extreme_bg_color = if t.is_dark {
-        Color32::from_rgb(0x0A, 0x0C, 0x12)
-    } else {
-        Color32::from_rgb(0xF4, 0xF6, 0xFA)
-    };
+    v.extreme_bg_color = t.bg_surface;
     v.faint_bg_color = t.bg_surface;
-    v.code_bg_color = if t.is_dark {
-        Color32::from_rgb(0x0E, 0x11, 0x18)
-    } else {
-        Color32::from_rgb(0xF4, 0xF6, 0xFA)
-    };
+    v.code_bg_color = t.bg_surface;
 
     v.override_text_color = Some(t.text_primary);
     v.hyperlink_color = t.accent;
 
-    // 4-state widget lifecycle.
+    // 4-state widget lifecycle — accent stays close to text color so
+    // the chrome feels monochrome.
     v.widgets.noninteractive.bg_fill = t.bg_elevated;
     v.widgets.noninteractive.weak_bg_fill = t.bg_elevated;
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, t.border_subtle);
@@ -358,12 +358,13 @@ pub fn apply(ctx: &Context, theme: ColorTheme) {
     ctx.set_visuals(v);
 
     ctx.style_mut(|s| {
-        s.spacing.item_spacing = egui::vec2(space::S2, space::S1);
-        s.spacing.button_padding = egui::vec2(space::S3, space::S1 + 2.0);
+        // Slightly more generous than before — luxury feels = breathing room.
+        s.spacing.item_spacing = egui::vec2(space::S2, space::S1 + 2.0);
+        s.spacing.button_padding = egui::vec2(space::S3, space::S2);
         s.spacing.menu_margin = egui::Margin::symmetric(space::S2, space::S1);
         s.spacing.window_margin = egui::Margin::ZERO;
-        s.spacing.indent = 18.0;
+        s.spacing.indent = 20.0;
         s.spacing.scroll.bar_width = 10.0;
-        s.spacing.scroll.handle_min_length = 32.0;
+        s.spacing.scroll.handle_min_length = 36.0;
     });
 }

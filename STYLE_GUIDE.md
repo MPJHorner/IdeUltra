@@ -1,11 +1,51 @@
 # IdeUltra Style Guide
 
 The design system that drives every pixel of IdeUltra. Distilled from
-Zed, Linear, Cursor, Raycast, Vercel/Geist, JetBrains Fleet, and shadcn/ui.
+Zed, Linear (light), Vercel Geist, Stripe docs, iA Writer, JetBrains
+Fleet, and shadcn/ui.
 
 This document is **the source of truth** — `src/style.rs` and
 `src/ui/components/` are direct expressions of it. When you're tempted
 to pick a stray hex, padding, or radius in a UI file, come back here.
+
+---
+
+## Aesthetic direction: "luxury light"
+
+IdeUltra is a code editor for **2026**. The visual answer to *"what
+does a code editor look like when it stops trying to look like a 2010
+code editor?"* is:
+
+* **White or near-white paper. No backdrops of indigo or purple.** The
+  editor canvas is `#FFFFFF`. The sidebar and status bar are one tiny
+  step away from white. The eye lands on the code, not the chrome.
+* **Type does the heavy lifting.** Hierarchy comes from size and
+  weight, not from coloured pills or bright accents.
+* **The accent is deep ink.** Looks black against white, has just
+  enough blue-grey cast to feel "designed". Used only for primary
+  buttons, focus rings, and the "selected" state. Never for decoration.
+* **Status colours are deep, never neon.** Crimson, amber, forest,
+  navy. No 60s neon-lime success badges.
+* **Borders barely exist** (~6 % alpha black). Surfaces separate by
+  whitespace, not by lines.
+* **Shadows are almost imperceptible** in light mode. We trust the
+  border + the spacing.
+* **Generous whitespace.** Density is intentionally lower than VS Code
+  or IntelliJ. We can afford it because we're not trying to cram in a
+  language server.
+
+Dark mode is **not** the same product with a hue inversion. It's a
+parallel charcoal / zinc complement, equally restrained. Light is the
+hero; dark is the night shift.
+
+**Reference points to keep on your reading list:**
+
+* Linear's light theme — proof that "white + grey" can be premium.
+* Vercel Geist colors / Geist typography — the gold standard for dev-
+  tool restraint.
+* Stripe docs — the canonical "white paper with a tiny accent" look.
+* iA Writer — typography as the only design.
+* GitHub light theme — what we want, but quieter.
 
 ---
 
@@ -68,53 +108,56 @@ sibling — see §6.
 Two token taxonomies wired together:
 
 **Surface ramp** — each step is a perceptually consistent lightness
-bump above the previous.
+bump above the previous. Light is the hero.
 
-| Token            | Dark value           | Light value          | Use |
+| Token            | Light value          | Dark value           | Use |
 |------------------|----------------------|----------------------|-----|
-| `bg.canvas`      | `#0F1116`            | `#FFFFFF`            | Editor body (darkest dark / lightest light) |
-| `bg.chrome`      | `#13161D`            | `#FAFBFC`            | Sidebar, status bar (one step from canvas) |
-| `bg.surface`     | `#191D26`            | `#F4F5F8`            | Tab strip, find bar |
-| `bg.elevated`    | `#1F2430`            | `#FFFFFF`            | Popovers, dropdowns, menus |
-| `bg.modal`       | `#22283A`            | `#FFFFFF`            | Modals, command palette |
-| `bg.subtle`      | `rgba(255,255,255,0.03)` | `rgba(0,0,0,0.02)` | Empty-state plates, hover backgrounds |
+| `bg.canvas`      | `#FFFFFF`            | `#0B0B0D`            | Editor body (lightest light / darkest dark) |
+| `bg.chrome`      | `#FBFBFC`            | `#101012`            | Sidebar, status bar |
+| `bg.surface`     | `#F5F5F7`            | `#161619`            | Tab strip, find bar |
+| `bg.elevated`    | `#FFFFFF`            | `#1B1B1E`            | Popovers, dropdowns, menus |
+| `bg.modal`       | `#FFFFFF`            | `#1E1E22`            | Modals, command palette |
+| `bg.subtle`      | `rgba(0,0,0,0.02)`   | `rgba(255,255,255,0.03)` | Empty-state plates, hover backgrounds |
 
-**Foreground ramp** — semantic text colors.
+**Foreground ramp** — semantic text colors. Never pure black on white
+(too harsh); deep ink at `#0A0A0A`.
 
-| Token             | Dark value | Light value | Use |
-|-------------------|------------|-------------|-----|
-| `text.primary`    | `#E6E8EC`  | `#0E1117`   | Body, labels, headings |
-| `text.secondary`  | `#A8ADB8`  | `#475569`   | Secondary copy, subtitles |
-| `text.muted`      | `#6E737D`  | `#7A8493`   | Captions, dim path hints, placeholder |
-| `text.disabled`   | `#4A4E58`  | `#B7BFC9`   | Disabled UI |
-| `text.on-accent`  | `#04101F`  | `#FFFFFF`   | Text on the accent fill |
+| Token             | Light value | Dark value | Use |
+|-------------------|-------------|------------|-----|
+| `text.primary`    | `#0A0A0A`   | `#F0F0F2`  | Body, labels, headings |
+| `text.secondary`  | `#444448`   | `#AEAEB2`  | Secondary copy, subtitles |
+| `text.muted`      | `#888892`   | `#727276`  | Captions, dim path hints, placeholder |
+| `text.disabled`   | `#C0C0C6`   | `#48484C`  | Disabled UI |
+| `text.on-accent`  | `#FFFFFF`   | `#0B0B0D`  | Text on the accent fill |
 
-**Border ramp** — two visibility tiers.
+**Border ramp** — three visibility tiers; almost invisible by design.
 
-| Token             | Dark                       | Light                    |
-|-------------------|----------------------------|--------------------------|
-| `border.subtle`   | `rgba(255,255,255,0.06)`   | `rgba(15,17,21,0.06)`    |
-| `border.default`  | `rgba(255,255,255,0.10)`   | `rgba(15,17,21,0.10)`    |
-| `border.strong`   | `rgba(255,255,255,0.16)`   | `rgba(15,17,21,0.16)`    |
+| Token             | Light                  | Dark                       |
+|-------------------|------------------------|----------------------------|
+| `border.subtle`   | `rgba(0,0,0,0.04)`     | `rgba(255,255,255,0.07)`   |
+| `border.default`  | `rgba(0,0,0,0.07)`     | `rgba(255,255,255,0.12)`   |
+| `border.strong`   | `rgba(0,0,0,0.12)`     | `rgba(255,255,255,0.23)`   |
 
-**Accent** — single primary accent + 10/25 % alpha variants for tints.
+**Accent** — deep ink in light; ivory in dark. *Looks like text*, not
+like a brand color.
 
-| Token             | Dark       | Light      |
+| Token             | Light      | Dark       |
 |-------------------|------------|------------|
-| `accent`          | `#7AA2F7`  | `#3B82F6`  |
-| `accent.hover`    | `#8FB3F9`  | `#2563EB`  |
-| `accent.bg`       | `rgba(122,162,247,0.12)` | `rgba(59,130,246,0.10)` |
-| `accent.border`   | `rgba(122,162,247,0.30)` | `rgba(59,130,246,0.30)` |
+| `accent`          | `#18181B`  | `#F4F4F6`  |
+| `accent.hover`    | `#27272A`  | `#FFFFFF`  |
+| `accent.bg`       | `rgba(0,0,0,0.03)` | `rgba(255,255,255,0.11)` |
+| `accent.border`   | `rgba(0,0,0,0.11)` | `rgba(255,255,255,0.31)` |
 
 **Semantic status** — *each* status color ships in **3 variants** so
-diagnostic pills don't shout.
+diagnostic pills don't shout. **Deep, never neon.** These values are
+the LIGHT-theme set; dark uses softer pastels of the same hues.
 
-| Status   | Foreground | Background (10 %α)         | Border (25 %α)             |
-|----------|------------|----------------------------|----------------------------|
-| Error    | `#E5484D`  | `rgba(229,72,77,0.10)`     | `rgba(229,72,77,0.25)`     |
-| Warning  | `#F5A524`  | `rgba(245,165,36,0.10)`    | `rgba(245,165,36,0.25)`    |
-| Success  | `#46A758`  | `rgba(70,167,88,0.10)`     | `rgba(70,167,88,0.25)`     |
-| Info     | `#5EB1F0`  | `rgba(94,177,240,0.10)`    | `rgba(94,177,240,0.25)`    |
+| Status   | Foreground | Background (~7 %α) | Border (~20 %α) |
+|----------|------------|---------------------|-----------------|
+| Error    | `#B91C1C`  | crimson 7 %         | crimson 20 %    |
+| Warning  | `#B45309`  | amber 7 %           | amber 20 %      |
+| Success  | `#15803D`  | forest 7 %          | forest 20 %     |
+| Info     | `#1D4ED8`  | navy 7 %            | navy 20 %       |
 
 **VCS** — distinct from semantic. Tuned for code gutters.
 

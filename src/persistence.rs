@@ -106,7 +106,7 @@ fn default_autosave_on_focus_loss() -> bool {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: ColorTheme::Dark,
+            theme: ColorTheme::Light,
             zoom: 1.0,
             sidebar_width: 260.0,
             sidebar_visible: true,
