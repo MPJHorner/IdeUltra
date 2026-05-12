@@ -5,7 +5,7 @@ use egui::{Align2, Key, RichText};
 use crate::editor::language::ColorTheme;
 use crate::fs_ops::{validate_name, NameError};
 use crate::style::{space, tokens, ts};
-use crate::ui::components::{ghost_button, modal_frame, primary_button};
+use crate::ui::components::{ghost_button, modal_frame};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamePromptKind {

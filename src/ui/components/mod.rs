@@ -8,7 +8,7 @@
 //! See [`STYLE_GUIDE.md`](../../../STYLE_GUIDE.md) §3 for the contract
 //! of each component.
 
-#![allow(dead_code)] // some components are used after the sweep; others land later
+#![allow(dead_code, unused_imports)] // some components are used after the sweep; others land later
 
 pub mod banner;
 pub mod buttons;
