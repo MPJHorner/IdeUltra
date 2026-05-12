@@ -1,5 +1,6 @@
 pub mod close_confirm_modal;
 pub mod command_palette_modal;
+pub mod delete_confirm_modal;
 pub mod diff_modal;
 pub mod editor_panel;
 pub mod find_bar;
@@ -7,6 +8,7 @@ pub mod finder_modal;
 pub mod highlight;
 pub mod keymap_picker;
 pub mod markdown_preview;
+pub mod name_prompt_modal;
 pub mod preferences_window;
 pub mod project_search_panel;
 pub mod quick_switcher;

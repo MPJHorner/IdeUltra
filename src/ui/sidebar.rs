@@ -10,6 +10,12 @@ use crate::workspace::tree::{FileTree, TreeNode};
 pub enum SidebarAction {
     None,
     OpenFile(PathBuf),
+    NewFileIn(PathBuf),
+    NewFolderIn(PathBuf),
+    Rename(PathBuf, bool /* is_dir */),
+    Delete(PathBuf, bool /* is_dir */),
+    Reveal(PathBuf),
+    CopyPath(PathBuf),
 }
 
 pub fn show(
@@ -83,18 +89,46 @@ fn render_node(
             .id_source(id)
             .default_open(node.expanded);
         let resp = header.show(ui, |ui| {
-            // Lazy: request load if not yet loaded.
             if node.children.is_none() {
                 to_load.push(path.clone());
             } else {
                 render_children(ui, node, path, action, to_toggle, to_load, git_status);
             }
         });
+        // Header bar gets a right-click context menu for folder ops.
+        resp.header_response.context_menu(|ui| {
+            if ui.button("New File…").clicked() {
+                *action = SidebarAction::NewFileIn(node.path.clone());
+                ui.close_menu();
+            }
+            if ui.button("New Folder…").clicked() {
+                *action = SidebarAction::NewFolderIn(node.path.clone());
+                ui.close_menu();
+            }
+            ui.separator();
+            if ui.button("Rename…").clicked() {
+                *action = SidebarAction::Rename(node.path.clone(), true);
+                ui.close_menu();
+            }
+            if ui.button("Delete").clicked() {
+                *action = SidebarAction::Delete(node.path.clone(), true);
+                ui.close_menu();
+            }
+            ui.separator();
+            if ui.button("Reveal in Finder").clicked() {
+                *action = SidebarAction::Reveal(node.path.clone());
+                ui.close_menu();
+            }
+            if ui.button("Copy Path").clicked() {
+                *action = SidebarAction::CopyPath(node.path.clone());
+                ui.close_menu();
+            }
+        });
         if resp.fully_open() != node.expanded && to_toggle.is_none() {
             *to_toggle = Some(path.clone());
         }
     } else {
-        ui.horizontal(|ui| {
+        let row = ui.horizontal(|ui| {
             let resp = ui.add(egui::SelectableLabel::new(
                 false,
                 format!("📄 {}", node.name),
@@ -116,6 +150,27 @@ fn render_node(
                         },
                     );
                 }
+            }
+            resp
+        });
+        // File row context menu.
+        row.inner.context_menu(|ui| {
+            if ui.button("Rename…").clicked() {
+                *action = SidebarAction::Rename(node.path.clone(), false);
+                ui.close_menu();
+            }
+            if ui.button("Delete").clicked() {
+                *action = SidebarAction::Delete(node.path.clone(), false);
+                ui.close_menu();
+            }
+            ui.separator();
+            if ui.button("Reveal in Finder").clicked() {
+                *action = SidebarAction::Reveal(node.path.clone());
+                ui.close_menu();
+            }
+            if ui.button("Copy Path").clicked() {
+                *action = SidebarAction::CopyPath(node.path.clone());
+                ui.close_menu();
             }
         });
     }

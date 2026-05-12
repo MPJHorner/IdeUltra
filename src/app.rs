@@ -27,7 +27,9 @@ use crate::ui::project_search_panel::{
     self, ProjectSearchAction, ProjectSearchState,
 };
 use crate::ui::close_confirm_modal::{self, CloseConfirmAction};
+use crate::ui::delete_confirm_modal::{self, DeleteAction};
 use crate::ui::keymap_picker::{self, KeymapPickerAction};
+use crate::ui::name_prompt_modal::{self, NamePromptAction, NamePromptKind, NamePromptState};
 use crate::ui::preferences_window::{self, PreferencesAction, PreferencesView};
 use crate::ui::quick_switcher::{self, QuickSwitcherState};
 use crate::ui::replace_confirm_modal::{self, ReplaceConfirmAction};
@@ -107,6 +109,12 @@ pub struct IdeUltraApp {
     replace_confirm_open: bool,
     /// Counter for "Untitled N" filenames. Resets every launch.
     next_untitled_n: usize,
+    /// Active sidebar-driven name prompt (New File, New Folder, Rename).
+    /// `parent_or_path` is the directory to create under, or the existing
+    /// path being renamed.
+    name_prompt: Option<(NamePromptState, std::path::PathBuf)>,
+    /// Active delete-confirm modal: (path, is_dir).
+    delete_confirm: Option<(std::path::PathBuf, bool)>,
 }
 
 impl IdeUltraApp {
@@ -162,6 +170,8 @@ impl IdeUltraApp {
             focused_right: loaded.session.focused_right,
             replace_confirm_open: false,
             next_untitled_n: 1,
+            name_prompt: None,
+            delete_confirm: None,
         };
         // Seed the MRU from the restored tabs so Ctrl+Tab works on first
         // launch. Order: active tab first, then the others in tab order.
@@ -1063,6 +1073,194 @@ impl IdeUltraApp {
         }
     }
 
+    fn handle_sidebar_request(&mut self, ctx: &Context, req: SidebarAction) {
+        match req {
+            SidebarAction::None | SidebarAction::OpenFile(_) => {}
+            SidebarAction::NewFileIn(dir) => {
+                let display = self.workspace_relative_display(&dir);
+                self.name_prompt = Some((
+                    NamePromptState {
+                        kind: NamePromptKind::NewFile,
+                        context_label: format!("in {display}"),
+                        input: String::new(),
+                        just_opened: true,
+                    },
+                    dir,
+                ));
+            }
+            SidebarAction::NewFolderIn(dir) => {
+                let display = self.workspace_relative_display(&dir);
+                self.name_prompt = Some((
+                    NamePromptState {
+                        kind: NamePromptKind::NewFolder,
+                        context_label: format!("in {display}"),
+                        input: String::new(),
+                        just_opened: true,
+                    },
+                    dir,
+                ));
+            }
+            SidebarAction::Rename(p, _is_dir) => {
+                let current = p
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                self.name_prompt = Some((
+                    NamePromptState {
+                        kind: NamePromptKind::Rename,
+                        context_label: format!("renaming {current}"),
+                        input: current,
+                        just_opened: true,
+                    },
+                    p,
+                ));
+            }
+            SidebarAction::Delete(p, is_dir) => {
+                self.delete_confirm = Some((p, is_dir));
+            }
+            SidebarAction::Reveal(p) => self.reveal_in_finder(&p),
+            SidebarAction::CopyPath(p) => {
+                let s = p.display().to_string();
+                self.copy_to_clipboard(ctx, s);
+            }
+        }
+    }
+
+    fn workspace_relative_display(&self, p: &Path) -> String {
+        if let Some(ws) = &self.workspace {
+            if let Ok(rel) = p.strip_prefix(&ws.root) {
+                return format!("{}/{}", ws.display_name(), rel.display());
+            }
+        }
+        p.display().to_string()
+    }
+
+    fn apply_name_prompt(&mut self, name: String) {
+        let Some((state, target)) = self.name_prompt.take() else {
+            return;
+        };
+        match state.kind {
+            NamePromptKind::NewFile => {
+                let new_path = match crate::fs_ops::resolve_under(&target, &name) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        self.flash(format!("Invalid name: {}", e.message()));
+                        return;
+                    }
+                };
+                if new_path.exists() {
+                    self.flash("A file with that name already exists");
+                    return;
+                }
+                if let Err(err) = std::fs::write(&new_path, b"") {
+                    self.flash(format!("Create failed: {err}"));
+                    return;
+                }
+                self.invalidate_after_fs_change(&target);
+                self.open_file(&new_path);
+                self.flash(format!("Created {name}"));
+            }
+            NamePromptKind::NewFolder => {
+                let new_path = match crate::fs_ops::resolve_under(&target, &name) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        self.flash(format!("Invalid name: {}", e.message()));
+                        return;
+                    }
+                };
+                if new_path.exists() {
+                    self.flash("A folder with that name already exists");
+                    return;
+                }
+                if let Err(err) = std::fs::create_dir(&new_path) {
+                    self.flash(format!("Create failed: {err}"));
+                    return;
+                }
+                self.invalidate_after_fs_change(&target);
+                self.flash(format!("Created folder {name}"));
+            }
+            NamePromptKind::Rename => {
+                let new_path = match crate::fs_ops::rename_target(&target, &name) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        self.flash(format!("Invalid name: {}", e.message()));
+                        return;
+                    }
+                };
+                if new_path == target {
+                    return; // No-op rename.
+                }
+                if new_path.exists() {
+                    self.flash("A file with that name already exists");
+                    return;
+                }
+                if let Err(err) = std::fs::rename(&target, &new_path) {
+                    self.flash(format!("Rename failed: {err}"));
+                    return;
+                }
+                // Rewrite the path on any open tab pointing at the old location.
+                for tab in self.tabs.iter_mut() {
+                    if tab.path == target {
+                        tab.path = new_path.clone();
+                        tab.display_name = new_path
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("untitled")
+                            .to_string();
+                        tab.syntax_name = crate::editor::language::syntax_for_path(&new_path).name.clone();
+                    }
+                }
+                if let Some(parent) = target.parent() {
+                    self.invalidate_after_fs_change(parent);
+                }
+                self.flash(format!("Renamed to {name}"));
+            }
+        }
+    }
+
+    fn perform_delete(&mut self) {
+        let Some((path, is_dir)) = self.delete_confirm.take() else {
+            return;
+        };
+        // Best-effort move to trash. Fall back to fs::remove_dir_all /
+        // remove_file if the user doesn't have `trash` available.
+        let result = if is_dir {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        if let Err(err) = result {
+            self.flash(format!("Delete failed: {err}"));
+            return;
+        }
+        // Close any open tab that pointed at the removed file.
+        let mut to_close: Vec<usize> = Vec::new();
+        for (i, tab) in self.tabs.iter().enumerate() {
+            if tab.path == path || tab.path.starts_with(&path) {
+                to_close.push(i);
+            }
+        }
+        for i in to_close.into_iter().rev() {
+            self.force_close_tab(i);
+        }
+        if let Some(parent) = path.parent() {
+            self.invalidate_after_fs_change(parent);
+        }
+        self.flash(format!(
+            "Deleted {}",
+            path.file_name().and_then(|s| s.to_str()).unwrap_or("")
+        ));
+    }
+
+    fn invalidate_after_fs_change(&mut self, dir: &Path) {
+        if let Some(ws) = self.workspace.as_mut() {
+            ws.tree.invalidate_containing(dir);
+            ws.invalidate_index();
+            ws.refresh_git_status();
+        }
+    }
+
     fn new_untitled(&mut self) {
         let tab = EditorTab::new_untitled(self.next_untitled_n);
         self.next_untitled_n += 1;
@@ -1755,6 +1953,7 @@ impl eframe::App for IdeUltraApp {
         let mut file_to_open: Option<PathBuf> = None;
         let mut project_jump: Option<(PathBuf, std::ops::Range<usize>)> = None;
         let mut run_search = false;
+        let mut sidebar_request: Option<SidebarAction> = None;
         if self.sidebar_visible || self.project_search.open {
             if let Some(ws) = self.workspace.as_mut() {
                 SidePanel::left("sidebar")
@@ -1783,8 +1982,29 @@ impl eframe::App for IdeUltraApp {
                                 &mut ws.tree,
                                 ws.git_status.as_ref(),
                             );
-                            if let SidebarAction::OpenFile(path) = action {
-                                file_to_open = Some(path);
+                            match action {
+                                SidebarAction::None => {}
+                                SidebarAction::OpenFile(path) => {
+                                    file_to_open = Some(path);
+                                }
+                                SidebarAction::NewFileIn(dir) => {
+                                    sidebar_request = Some(SidebarAction::NewFileIn(dir));
+                                }
+                                SidebarAction::NewFolderIn(dir) => {
+                                    sidebar_request = Some(SidebarAction::NewFolderIn(dir));
+                                }
+                                SidebarAction::Rename(p, is_dir) => {
+                                    sidebar_request = Some(SidebarAction::Rename(p, is_dir));
+                                }
+                                SidebarAction::Delete(p, is_dir) => {
+                                    sidebar_request = Some(SidebarAction::Delete(p, is_dir));
+                                }
+                                SidebarAction::Reveal(p) => {
+                                    sidebar_request = Some(SidebarAction::Reveal(p));
+                                }
+                                SidebarAction::CopyPath(p) => {
+                                    sidebar_request = Some(SidebarAction::CopyPath(p));
+                                }
                             }
                         }
                     });
@@ -1795,6 +2015,9 @@ impl eframe::App for IdeUltraApp {
         }
         if let Some(path) = file_to_open {
             self.open_file(&path);
+        }
+        if let Some(req) = sidebar_request {
+            self.handle_sidebar_request(ctx, req);
         }
         // Pull the project-search jump out of the borrow scope before opening.
         let project_jump_pending = project_jump.map(|(p, r)| {
@@ -2151,6 +2374,30 @@ impl eframe::App for IdeUltraApp {
                     self.soft_wrap = b;
                     self.saver.mark_dirty();
                 }
+            }
+        }
+
+        // ── name prompt (sidebar: New File / Folder / Rename) ───────────
+        if self.name_prompt.is_some() {
+            let action = {
+                let (state, _) = self.name_prompt.as_mut().unwrap();
+                name_prompt_modal::show(ctx, state)
+            };
+            match action {
+                NamePromptAction::None => {}
+                NamePromptAction::Cancel => self.name_prompt = None,
+                NamePromptAction::Confirm(name) => self.apply_name_prompt(name),
+            }
+        }
+
+        // ── delete-confirm modal ────────────────────────────────────────
+        if let Some((path, is_dir)) = self.delete_confirm.as_ref() {
+            let target = path.clone();
+            let is_dir = *is_dir;
+            match delete_confirm_modal::show(ctx, &target, is_dir) {
+                DeleteAction::None => {}
+                DeleteAction::Cancel => self.delete_confirm = None,
+                DeleteAction::Confirm => self.perform_delete(),
             }
         }
 

@@ -9,6 +9,7 @@ mod diff;
 mod editor;
 mod find;
 mod finder;
+mod fs_ops;
 mod git;
 mod indent;
 mod keymap;

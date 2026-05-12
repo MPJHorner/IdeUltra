@@ -51,6 +51,21 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.15.0</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>Sidebar file operations.</strong> Right-click a folder for
+          <strong>New File…</strong>, <strong>New Folder…</strong>; right-click a
+          file for <strong>Rename…</strong>. Both contexts get <strong>Delete</strong>
+          (with confirmation), <strong>Reveal in Finder</strong>, and
+          <strong>Copy Path</strong>. Name input rejects empty values, separators,
+          NUL bytes, reserved Windows names, and <code>.</code>/<code>..</code> —
+          inline error explains why if the validation fails. Open tabs whose paths
+          are renamed or deleted are updated or closed in place; the workspace
+          file index and git status refresh automatically.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.14.0</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>New untitled buffer (⌘N).</strong> Creates an in-memory tab labelled <code>Untitled N</code>. The recovery store and autosave both skip it; the only way to persist it is <strong>Save As</strong>.</li>
