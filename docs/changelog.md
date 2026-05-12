@@ -3,6 +3,16 @@ title: Changelog
 permalink: /changelog.html
 ---
 
+## v0.12.0 — 2026-05-12
+
+- **Replace in project.** The project-search panel grows a Replace toggle:
+  type a replacement string, click **Replace All in files**, and confirm
+  via a modal showing the file + match counts. Each file is read (or
+  taken from the open tab's buffer if dirtier than disk), `find::replace_all`
+  applied, and the result written back. Open tabs for affected files
+  update their buffers in place and are marked clean. Errors per file
+  are logged and counted; the rest of the replace still completes.
+
 ## v0.11.0 — 2026-05-12
 
 - **Split editor pane (⌘\).** A second editor pane opens beside the first,

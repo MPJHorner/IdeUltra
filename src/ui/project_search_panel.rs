@@ -9,12 +9,15 @@ use crate::project_search::{LineMatch, SearchOutcome};
 pub struct ProjectSearchState {
     pub open: bool,
     pub query: String,
+    pub replacement: String,
     pub options: FindOptions,
     pub outcome: Option<SearchOutcome>,
     /// `true` when the query/options changed but the search hasn't yet run.
     pub dirty: bool,
     /// Set on the frame we want focus.
     pub just_opened: bool,
+    /// Whether the replace input + button are visible.
+    pub show_replace: bool,
 }
 
 impl ProjectSearchState {
@@ -39,6 +42,8 @@ pub enum ProjectSearchAction {
         path: PathBuf,
         byte_range: std::ops::Range<usize>,
     },
+    /// Replace every match across every file from the current outcome.
+    ReplaceAll,
 }
 
 pub fn show(ui: &mut Ui, state: &mut ProjectSearchState) -> ProjectSearchAction {
@@ -88,10 +93,38 @@ pub fn show(ui: &mut Ui, state: &mut ProjectSearchState) -> ProjectSearchAction 
         {
             state.mark_dirty();
         }
+        ui.toggle_value(&mut state.show_replace, "Replace")
+            .on_hover_text("Toggle the replacement row");
         if ui.button("Search").clicked() || enter {
             action = ProjectSearchAction::Run;
         }
     });
+
+    if state.show_replace {
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut state.replacement)
+                    .hint_text("Replace with")
+                    .desired_width(f32::INFINITY),
+            );
+        });
+        ui.horizontal(|ui| {
+            let has_matches = state
+                .outcome
+                .as_ref()
+                .map(|o| o.total_matches > 0 && o.error.is_none())
+                .unwrap_or(false);
+            let btn = egui::Button::new("Replace All in files");
+            if ui.add_enabled(has_matches, btn).clicked() {
+                action = ProjectSearchAction::ReplaceAll;
+            }
+            ui.label(
+                egui::RichText::new("Writes through to disk · no undo")
+                    .small()
+                    .weak(),
+            );
+        });
+    }
 
     ui.separator();
 

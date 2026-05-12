@@ -30,6 +30,7 @@ use crate::ui::close_confirm_modal::{self, CloseConfirmAction};
 use crate::ui::keymap_picker::{self, KeymapPickerAction};
 use crate::ui::preferences_window::{self, PreferencesAction, PreferencesView};
 use crate::ui::quick_switcher::{self, QuickSwitcherState};
+use crate::ui::replace_confirm_modal::{self, ReplaceConfirmAction};
 use crate::ui::recovery_modal::{self, RecoveryAction};
 use crate::ui::{
     editor_panel,
@@ -102,6 +103,8 @@ pub struct IdeUltraApp {
     /// Which pane is currently focused. Only meaningful when `pane2_active`
     /// is `Some`. `active_tab` always refers to the focused pane's tab.
     focused_right: bool,
+    /// When set, the replace-in-project confirmation modal is showing.
+    replace_confirm_open: bool,
 }
 
 impl IdeUltraApp {
@@ -155,6 +158,7 @@ impl IdeUltraApp {
             preferences_open: false,
             pane2_active: None,
             focused_right: false,
+            replace_confirm_open: false,
         };
         // Seed the MRU from the restored tabs so Ctrl+Tab works on first
         // launch. Order: active tab first, then the others in tab order.
@@ -1109,6 +1113,98 @@ impl IdeUltraApp {
         self.project_search.open();
     }
 
+    fn execute_replace_all_in_project(&mut self) {
+        let Some(outcome) = self.project_search.outcome.clone() else {
+            return;
+        };
+        if outcome.hits.is_empty() {
+            return;
+        }
+        let query = self.project_search.query.clone();
+        let replacement = self.project_search.replacement.clone();
+        let options = self.project_search.options;
+
+        let mut files_changed = 0usize;
+        let mut replacements_done = 0usize;
+        let mut errors = 0usize;
+
+        for file_hits in outcome.hits.iter() {
+            let path = file_hits.path.clone();
+            // Prefer the in-memory buffer if a tab is open — that way unsaved
+            // edits don't get clobbered.
+            let source_text =
+                if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
+                    self.tabs[idx].buffer.text.clone()
+                } else {
+                    match std::fs::read_to_string(&path) {
+                        Ok(t) => t,
+                        Err(err) => {
+                            tracing::warn!(error = %err, path = %path.display(), "read for replace failed");
+                            errors += 1;
+                            continue;
+                        }
+                    }
+                };
+
+            let (new_text, count) =
+                match crate::find::replace_all(&source_text, &query, &replacement, options) {
+                    Ok(r) => r,
+                    Err(err) => {
+                        tracing::warn!(error = ?err, path = %path.display(), "replace failed");
+                        errors += 1;
+                        continue;
+                    }
+                };
+            if count == 0 {
+                continue;
+            }
+            // Write through.
+            if let Err(err) = std::fs::write(&path, new_text.as_bytes()) {
+                tracing::warn!(error = %err, path = %path.display(), "write for replace failed");
+                errors += 1;
+                continue;
+            }
+            files_changed += 1;
+            replacements_done += count;
+
+            // Update any open tab on this file to match the new contents.
+            if let Some(idx) = self.tabs.iter_mut().position(|t| t.path == path) {
+                self.tabs[idx].buffer.text = new_text;
+                self.tabs[idx].buffer.mark_clean();
+                self.tabs[idx].external_change = false;
+                self.tabs[idx].last_recovered_hash = None;
+                if let Some(store) = &self.recovery_store {
+                    let _ = store.clear(&path);
+                }
+            }
+        }
+
+        // Invalidate the workspace's git status + file index so the sidebar
+        // reflects the new modified-list and the next search is fresh.
+        if let Some(ws) = self.workspace.as_mut() {
+            ws.refresh_git_status();
+            ws.invalidate_index();
+        }
+        // Drop the stale outcome — the user can run search again to see what's left.
+        self.project_search.outcome = None;
+        self.project_search.dirty = true;
+
+        let msg = if errors > 0 {
+            format!(
+                "Replaced {replacements_done} match(es) in {files_changed} file(s); {errors} failed"
+            )
+        } else {
+            format!("Replaced {replacements_done} match(es) in {files_changed} file(s)")
+        };
+        tracing::info!(
+            replacements = replacements_done,
+            files = files_changed,
+            errors,
+            "project replace complete"
+        );
+        self.flash(msg);
+    }
+
     fn run_project_search(&mut self) {
         let Some(ws) = self.workspace.as_mut() else {
             return;
@@ -1539,6 +1635,9 @@ impl eframe::App for IdeUltraApp {
                                 ProjectSearchAction::OpenAt { path, byte_range } => {
                                     project_jump = Some((path, byte_range));
                                 }
+                                ProjectSearchAction::ReplaceAll => {
+                                    self.replace_confirm_open = true;
+                                }
                             }
                         } else {
                             let action = sidebar::show(
@@ -1913,6 +2012,29 @@ impl eframe::App for IdeUltraApp {
                 PreferencesAction::SetSoftWrap(b) => {
                     self.soft_wrap = b;
                     self.saver.mark_dirty();
+                }
+            }
+        }
+
+        // ── replace-in-project confirmation modal ───────────────────────
+        if self.replace_confirm_open {
+            let outcome = self.project_search.outcome.as_ref();
+            let file_count = outcome.map(|o| o.hits.len()).unwrap_or(0);
+            let match_count = outcome.map(|o| o.total_matches).unwrap_or(0);
+            let query = self.project_search.query.clone();
+            let replacement = self.project_search.replacement.clone();
+            match replace_confirm_modal::show(
+                ctx,
+                file_count,
+                match_count,
+                &query,
+                &replacement,
+            ) {
+                ReplaceConfirmAction::None => {}
+                ReplaceConfirmAction::Cancel => self.replace_confirm_open = false,
+                ReplaceConfirmAction::Confirm => {
+                    self.replace_confirm_open = false;
+                    self.execute_replace_all_in_project();
                 }
             }
         }

@@ -11,5 +11,6 @@ pub mod preferences_window;
 pub mod project_search_panel;
 pub mod quick_switcher;
 pub mod recovery_modal;
+pub mod replace_confirm_modal;
 pub mod sidebar;
 pub mod tabs;
