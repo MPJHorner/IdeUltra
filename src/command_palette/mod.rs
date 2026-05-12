@@ -40,6 +40,8 @@ pub enum CommandId {
     OpenPreferences,
     ToggleSplit,
     SelectNextOccurrence,
+    NewUntitled,
+    SaveAs,
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +209,16 @@ pub fn all_commands() -> &'static [CommandEntry] {
             id: CommandId::SelectNextOccurrence,
             label: "Edit: Select Next Occurrence",
             keys: "⌘D",
+        },
+        CommandEntry {
+            id: CommandId::NewUntitled,
+            label: "File: New Untitled File",
+            keys: "⌘N",
+        },
+        CommandEntry {
+            id: CommandId::SaveAs,
+            label: "File: Save As…",
+            keys: "⇧⌘S",
         },
     ]
 }

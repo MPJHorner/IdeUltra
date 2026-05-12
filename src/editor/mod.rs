@@ -24,6 +24,10 @@ pub struct EditorTab {
     /// Lets the app skip the write when nothing has changed since the
     /// last recovery snapshot — cheap dirty-check.
     pub last_recovered_hash: Option<u64>,
+    /// True when the tab hasn't been saved yet. `self.path` is a
+    /// placeholder like `Untitled 1` and is NOT a real filesystem path.
+    /// Save / autosave skip this tab until the user runs Save As.
+    pub is_untitled: bool,
 }
 
 impl EditorTab {
@@ -45,7 +49,42 @@ impl EditorTab {
             highlight: HighlightCache::default(),
             external_change: false,
             last_recovered_hash: None,
+            is_untitled: false,
         })
+    }
+
+    /// Brand-new in-memory buffer with no on-disk path yet. `n` is a
+    /// monotonically increasing counter so the tab labels read
+    /// `Untitled 1`, `Untitled 2`, etc.
+    pub fn new_untitled(n: usize) -> Self {
+        let label = format!("Untitled {n}");
+        let placeholder = PathBuf::from(&label);
+        Self {
+            buffer: Buffer::new(String::new()),
+            path: placeholder,
+            display_name: label,
+            syntax_name: SYNTAX_SET.find_syntax_plain_text().name.clone(),
+            highlight: HighlightCache::default(),
+            external_change: false,
+            last_recovered_hash: None,
+            is_untitled: true,
+        }
+    }
+
+    /// Promote an untitled tab to a real on-disk file. Updates path,
+    /// display name, syntax, then writes through.
+    pub fn save_as(&mut self, new_path: impl AsRef<Path>) -> Result<()> {
+        let new_path = new_path.as_ref().to_path_buf();
+        self.path = new_path;
+        self.display_name = self
+            .path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("untitled")
+            .to_string();
+        self.syntax_name = syntax_for_path(&self.path).name.clone();
+        self.is_untitled = false;
+        self.save()
     }
 
     /// Build a tab from a path plus contents already in memory.
@@ -69,6 +108,7 @@ impl EditorTab {
             highlight: HighlightCache::default(),
             external_change: false,
             last_recovered_hash: None,
+            is_untitled: false,
         }
     }
 
@@ -84,8 +124,13 @@ impl EditorTab {
     }
 
     /// Save the buffer to disk. The caller decides whether to normalize
-    /// the contents first via `apply_save_normalization`.
+    /// the contents first via `apply_save_normalization`. Returns an
+    /// error for untitled tabs — the caller should route those through
+    /// `save_as` after prompting for a path.
     pub fn save(&mut self) -> Result<()> {
+        if self.is_untitled {
+            anyhow::bail!("untitled buffer — use Save As");
+        }
         std::fs::write(&self.path, self.buffer.text.as_bytes())
             .with_context(|| format!("write {}", self.path.display()))?;
         self.buffer.mark_clean();

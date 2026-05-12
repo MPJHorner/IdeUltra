@@ -105,6 +105,8 @@ pub struct IdeUltraApp {
     focused_right: bool,
     /// When set, the replace-in-project confirmation modal is showing.
     replace_confirm_open: bool,
+    /// Counter for "Untitled N" filenames. Resets every launch.
+    next_untitled_n: usize,
 }
 
 impl IdeUltraApp {
@@ -159,6 +161,7 @@ impl IdeUltraApp {
             pane2_active: loaded.session.pane2_active,
             focused_right: loaded.session.focused_right,
             replace_confirm_open: false,
+            next_untitled_n: 1,
         };
         // Seed the MRU from the restored tabs so Ctrl+Tab works on first
         // launch. Order: active tab first, then the others in tab order.
@@ -308,6 +311,10 @@ impl IdeUltraApp {
         let final_nl = self.ensure_final_newline_on_save;
         for tab in self.tabs.iter_mut() {
             if !tab.is_dirty() {
+                continue;
+            }
+            // Untitled tabs need user input for path — skip on autosave.
+            if tab.is_untitled {
                 continue;
             }
             tab.apply_save_normalization(trim, final_nl);
@@ -501,6 +508,13 @@ impl IdeUltraApp {
     }
 
     fn save_active(&mut self) {
+        // Untitled tabs route through Save As — we don't have a real path yet.
+        if let Some(tab) = self.tabs.get(self.active_tab) {
+            if tab.is_untitled {
+                self.save_as_active();
+                return;
+            }
+        }
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
             tab.apply_save_normalization(
                 self.trim_whitespace_on_save,
@@ -534,6 +548,11 @@ impl IdeUltraApp {
         let now = std::time::Instant::now();
         for tab in self.tabs.iter_mut() {
             if !tab.is_dirty() {
+                continue;
+            }
+            // Untitled buffers don't have a real path — the recovery store
+            // key would collide across launches. Skip until Save As lands.
+            if tab.is_untitled {
                 continue;
             }
             // Per-tab debounce.
@@ -1039,6 +1058,62 @@ impl IdeUltraApp {
             CommandId::OpenPreferences => self.preferences_open = !self.preferences_open,
             CommandId::ToggleSplit => self.toggle_split(),
             CommandId::SelectNextOccurrence => self.select_next_occurrence(ctx),
+            CommandId::NewUntitled => self.new_untitled(),
+            CommandId::SaveAs => self.save_as_active(),
+        }
+    }
+
+    fn new_untitled(&mut self) {
+        let tab = EditorTab::new_untitled(self.next_untitled_n);
+        self.next_untitled_n += 1;
+        self.tabs.push(tab);
+        self.active_tab = self.tabs.len() - 1;
+        self.tab_mru.touch(self.active_tab);
+        self.saver.mark_dirty();
+        self.flash("New buffer — use Save As (⇧⌘S) to write to disk");
+    }
+
+    fn save_as_active(&mut self) {
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            return;
+        };
+        let mut dialog = rfd::FileDialog::new().set_file_name(&tab.display_name);
+        // Default to the workspace root when one's open so the picker
+        // starts somewhere useful.
+        if let Some(ws) = &self.workspace {
+            dialog = dialog.set_directory(&ws.root);
+        }
+        let Some(path) = dialog.save_file() else {
+            return;
+        };
+
+        // Apply on-save normalisation before writing — same as the
+        // normal Save path.
+        let trim = self.trim_whitespace_on_save;
+        let final_nl = self.ensure_final_newline_on_save;
+        let Some(tab) = self.tabs.get_mut(self.active_tab) else {
+            return;
+        };
+        tab.apply_save_normalization(trim, final_nl);
+        match tab.save_as(&path) {
+            Ok(_) => {
+                let name = tab.display_name.clone();
+                tracing::info!(file = %path.display(), "saved as");
+                if let Some(store) = &self.recovery_store {
+                    let _ = store.clear(&path);
+                }
+                tab.last_recovered_hash = None;
+                self.recent_files.push(path.clone());
+                if let Some(ws) = self.workspace.as_mut() {
+                    ws.refresh_git_status();
+                    ws.invalidate_index();
+                }
+                self.flash(format!("Saved {name}"));
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "save_as failed");
+                self.flash(format!("Save As failed: {err}"));
+            }
         }
     }
 
@@ -1459,6 +1534,10 @@ impl eframe::App for IdeUltraApp {
         TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
+                    if ui.button("New  ⌘N").clicked() {
+                        ui.close_menu();
+                        self.new_untitled();
+                    }
                     if ui.button("Open File…  ⌘O").clicked() {
                         ui.close_menu();
                         self.open_file_dialog();
@@ -1497,6 +1576,10 @@ impl eframe::App for IdeUltraApp {
                     if ui.button("Save  ⌘S").clicked() {
                         ui.close_menu();
                         self.save_active();
+                    }
+                    if ui.button("Save As…  ⇧⌘S").clicked() {
+                        ui.close_menu();
+                        self.save_as_active();
                     }
                     if ui.button("Close Tab  ⌘W").clicked() {
                         ui.close_menu();

@@ -51,6 +51,14 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.14.0</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>New untitled buffer (⌘N).</strong> Creates an in-memory tab labelled <code>Untitled N</code>. The recovery store and autosave both skip it; the only way to persist it is <strong>Save As</strong>.</li>
+        <li><strong>Save As (⇧⌘S).</strong> Picks a destination via the native save panel (defaults to the workspace root). Promotes an untitled tab to a real file, applies on-save normalisation, refreshes git status, drops the recovery snapshot, and adds the path to Recent files. <strong>Save</strong> on an untitled tab now routes through Save As automatically.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.13.0</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>Select next occurrence (⌘D).</strong> With no selection, picks the word under the cursor. With a selection: jumps to the next match in the buffer (wraps at the end). Identifier-aware — <code>_</code> and Unicode letters count as word characters.</li>
