@@ -51,6 +51,19 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.18.0</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>Create new file from ⌘P.</strong> Type a relative path
+          like <code>src/foo.rs</code>; if nothing matches, an extra
+          <code>+ Create file: …</code> row appears at the bottom of the
+          results. Enter writes an empty file (creating intermediate
+          directories), refreshes the workspace index + git status, and
+          opens it in a new tab. Reuses <code>fs_ops::validate_name</code>
+          so reserved names and traversal (<code>..</code>) are rejected.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.17.0</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>Recent files surface first in ⌘P.</strong> The fuzzy file

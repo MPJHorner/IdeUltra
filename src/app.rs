@@ -1567,15 +1567,40 @@ impl IdeUltraApp {
         self.project_search.dirty = false;
     }
 
+    fn create_and_open(&mut self, path: &Path) {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                if let Err(err) = std::fs::create_dir_all(parent) {
+                    self.flash(format!("Create dir failed: {err}"));
+                    return;
+                }
+            }
+        }
+        if let Err(err) = std::fs::write(path, b"") {
+            self.flash(format!("Create file failed: {err}"));
+            return;
+        }
+        if let Some(parent) = path.parent() {
+            self.invalidate_after_fs_change(parent);
+        }
+        self.open_file(path);
+        self.flash(format!(
+            "Created {}",
+            path.file_name().and_then(|s| s.to_str()).unwrap_or("")
+        ));
+    }
+
     fn open_finder(&mut self) {
         let Some(ws) = self.workspace.as_mut() else {
             self.flash("Open a folder first (⇧⌘O)");
             return;
         };
         ws.ensure_index();
+        let ws_root = ws.root.clone();
         if let Some(index) = ws.file_index.as_ref() {
             self.finder.open();
-            self.finder.refresh(index, &self.recent_files.entries);
+            self.finder
+                .refresh(index, &self.recent_files.entries, Some(&ws_root));
         }
     }
 
@@ -2577,12 +2602,11 @@ impl eframe::App for IdeUltraApp {
 
         // ── fuzzy file finder modal (⌘P) ────────────────────────────────
         if self.finder.open {
-            // Clone the recent-files list once so the borrow doesn't fight
-            // with the workspace borrow below.
             let recent = self.recent_files.entries.clone();
+            let ws_root = self.workspace.as_ref().map(|w| w.root.clone());
             let action = if let Some(ws) = self.workspace.as_ref() {
                 if let Some(index) = ws.file_index.as_ref() {
-                    self.finder.refresh(index, &recent);
+                    self.finder.refresh(index, &recent, ws_root.as_deref());
                     finder_modal::show(ctx, &mut self.finder, index)
                 } else {
                     FinderAction::Close
@@ -2596,6 +2620,10 @@ impl eframe::App for IdeUltraApp {
                 FinderAction::Open(path) => {
                     self.finder.close();
                     self.open_file(&path);
+                }
+                FinderAction::Create(path) => {
+                    self.finder.close();
+                    self.create_and_open(&path);
                 }
             }
         }

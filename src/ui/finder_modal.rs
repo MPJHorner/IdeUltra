@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use egui::{Align, Key, Layout, RichText, ScrollArea, Sense};
 
@@ -27,8 +27,34 @@ impl FinderState {
         self.open = false;
     }
 
-    pub fn refresh(&mut self, index: &FileIndex, recent: &[PathBuf]) {
+    pub fn refresh(
+        &mut self,
+        index: &FileIndex,
+        recent: &[PathBuf],
+        ws_root: Option<&Path>,
+    ) {
         self.results = search_with_recent(index, &self.query, recent, 60);
+        // If the query is a valid relative path that doesn't match an
+        // existing file, surface a synthetic "+ Create file" row.
+        if let Some(root) = ws_root {
+            let query = self.query.trim();
+            if !query.is_empty() && !query.split('/').any(|c| c == "..") {
+                let last = query.rsplit('/').next().unwrap_or(query);
+                if crate::fs_ops::validate_name(last).is_ok() {
+                    let target = root.join(query);
+                    let already_real = self
+                        .results
+                        .iter()
+                        .any(|m| !m.is_create && m.path == target);
+                    if !target.exists() && !already_real {
+                        self.results.push(crate::finder::Match::create(
+                            target,
+                            query.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
         if self.selected >= self.results.len() {
             self.selected = 0;
         }
@@ -38,6 +64,9 @@ impl FinderState {
 pub enum FinderAction {
     None,
     Open(PathBuf),
+    /// Selected a synthetic "Create file" entry — the app should
+    /// `fs::write(path, b"")` then open the file.
+    Create(PathBuf),
     Close,
 }
 
@@ -48,7 +77,7 @@ pub fn show(
 ) -> FinderAction {
     let mut action = FinderAction::None;
     let mut want_close = false;
-    let mut want_open: Option<PathBuf> = None;
+    let mut want_open: Option<Match> = None;
 
     ctx.input(|i| {
         if i.key_pressed(Key::Escape) {
@@ -62,7 +91,7 @@ pub fn show(
         }
         if i.key_pressed(Key::Enter) {
             if let Some(m) = state.results.get(state.selected) {
-                want_open = Some(m.path.clone());
+                want_open = Some(m.clone());
             }
         }
     });
@@ -116,7 +145,7 @@ pub fn show(
                     } else {
                         for (idx, m) in state.results.iter().enumerate() {
                             if render_row(ui, m, idx == state.selected) {
-                                want_open = Some(m.path.clone());
+                                want_open = Some(m.clone());
                             }
                             if ui
                                 .interact(
@@ -150,8 +179,12 @@ pub fn show(
             });
         });
 
-    if let Some(path) = want_open {
-        action = FinderAction::Open(path);
+    if let Some(m) = want_open {
+        action = if m.is_create {
+            FinderAction::Create(m.path)
+        } else {
+            FinderAction::Open(m.path)
+        };
     } else if want_close {
         action = FinderAction::Close;
     }
@@ -168,19 +201,16 @@ fn render_row(ui: &mut egui::Ui, m: &Match, selected: bool) -> bool {
     };
     let name_color = if selected {
         visuals.selection.stroke.color
+    } else if m.is_create {
+        visuals.hyperlink_color
     } else {
         visuals.text_color()
     };
     let path_color = if selected {
-        // Pull the dim path color toward the accent so it stays legible
-        // on the selection background.
         visuals.selection.stroke.color.linear_multiply(0.7)
     } else {
         visuals.weak_text_color()
     };
-
-    let (filename, dir) = split_display(&m.display);
-    let icon = file_glyph(filename);
 
     let frame = egui::Frame::default()
         .fill(row_fill)
@@ -195,21 +225,43 @@ fn render_row(ui: &mut egui::Ui, m: &Match, selected: bool) -> bool {
     let response = frame
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon).size(14.0).color(path_color));
-                ui.add_space(4.0);
-                ui.label(
-                    RichText::new(filename)
-                        .size(14.0)
-                        .strong()
-                        .color(name_color),
-                );
-                if !dir.is_empty() {
+                if m.is_create {
+                    // Synthetic "Create file" entry: leading +, then full
+                    // query as the label, then "(create new file)" hint.
+                    ui.label(RichText::new("+").size(14.0).color(name_color));
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(&m.display)
+                            .size(14.0)
+                            .strong()
+                            .color(name_color),
+                    );
                     ui.add_space(8.0);
                     ui.label(
-                        RichText::new(dir)
+                        RichText::new("create new file")
                             .size(12.0)
-                            .color(path_color),
+                            .color(path_color)
+                            .italics(),
                     );
+                } else {
+                    let (filename, dir) = split_display(&m.display);
+                    let icon = file_glyph(filename);
+                    ui.label(RichText::new(icon).size(14.0).color(path_color));
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(filename)
+                            .size(14.0)
+                            .strong()
+                            .color(name_color),
+                    );
+                    if !dir.is_empty() {
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new(dir)
+                                .size(12.0)
+                                .color(path_color),
+                        );
+                    }
                 }
             });
         })

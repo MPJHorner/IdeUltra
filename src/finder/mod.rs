@@ -194,11 +194,7 @@ pub fn search_with_recent(
                 (s + bonus, d, p)
             })
         })
-        .map(|(s, d, p)| Match {
-            score: s,
-            path: p.clone(),
-            display: d.clone(),
-        })
+        .map(|(s, d, p)| Match::existing(s, p.clone(), d.clone()))
         .collect();
     hits.sort_by(|a, b| b.score.cmp(&a.score));
     hits.truncate(limit);
@@ -222,11 +218,7 @@ fn empty_query_results(
     let mut seen: std::collections::HashSet<&std::path::Path> = Default::default();
     for r in recent {
         if let Some(display) = display_by_path.get(r.as_path()) {
-            out.push(Match {
-                score: 0,
-                path: r.clone(),
-                display: (*display).clone(),
-            });
+            out.push(Match::existing(0, r.clone(), (*display).clone()));
             seen.insert(r.as_path());
             if out.len() >= limit {
                 return out;
@@ -239,11 +231,7 @@ fn empty_query_results(
         if seen.contains(p.as_path()) {
             continue;
         }
-        out.push(Match {
-            score: 0,
-            path: p.clone(),
-            display: d.clone(),
-        });
+        out.push(Match::existing(0, p.clone(), d.clone()));
         if out.len() >= limit {
             break;
         }
@@ -267,6 +255,17 @@ pub struct Match {
     pub path: PathBuf,
     /// Original-case workspace-relative path, for display only.
     pub display: String,
+    /// True when this isn't a real file yet — selecting it creates the file.
+    pub is_create: bool,
+}
+
+impl Match {
+    pub fn existing(score: i32, path: PathBuf, display: String) -> Self {
+        Self { score, path, display, is_create: false }
+    }
+    pub fn create(path: PathBuf, display: String) -> Self {
+        Self { score: i32::MIN, path, display, is_create: true }
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────────
