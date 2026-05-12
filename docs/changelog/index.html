@@ -51,6 +51,19 @@
     <p>Every release. Latest first.</p>
 
     <div class="changelog-entry">
+      <div class="changelog-header"><h2>v0.16.0</h2><time>2026-05-12</time></div>
+      <ul>
+        <li><strong>Open Recent Folder.</strong> <code>File → Open Recent Folder</code>
+          lists the last 10 workspaces you've opened. Same MRU semantics as Open
+          Recent (file-level): each open pushes to the head; entries whose
+          directories have been deleted are pruned on startup.</li>
+        <li><strong>Workspace name in window title.</strong> The macOS title bar
+          now shows <code>filename — WorkspaceName — IdeUltra</code> instead of
+          just the filename, so the Dock and ⌘Tab switcher show context.</li>
+      </ul>
+    </div>
+
+    <div class="changelog-entry">
       <div class="changelog-header"><h2>v0.15.0</h2><time>2026-05-12</time></div>
       <ul>
         <li><strong>Sidebar file operations.</strong> Right-click a folder for

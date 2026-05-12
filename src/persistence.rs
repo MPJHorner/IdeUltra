@@ -129,6 +129,8 @@ pub struct SessionState {
     pub pane2_active: Option<usize>,
     #[serde(default)]
     pub focused_right: bool,
+    #[serde(default)]
+    pub recent_workspaces: RecentFiles,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,6 +188,12 @@ pub fn load() -> Loaded {
         .unwrap_or_default();
     let mut session = filter_missing_tabs(session);
     session.recent_files.prune_missing();
+    // Workspaces are directories — RecentFiles::prune_missing only keeps
+    // entries that pass is_file(). Roll our own keep-if-dir filter.
+    session
+        .recent_workspaces
+        .entries
+        .retain(|p| p.is_dir());
     Loaded {
         settings,
         session,
@@ -316,6 +324,7 @@ mod tests {
             recent_files: Default::default(),
             pane2_active: None,
             focused_right: false,
+            recent_workspaces: Default::default(),
         };
         let bytes = serde_json::to_vec(&sess).unwrap();
         let parsed: SessionState = serde_json::from_slice(&bytes).unwrap();
@@ -340,6 +349,7 @@ mod tests {
             recent_files: Default::default(),
             pane2_active: None,
             focused_right: false,
+            recent_workspaces: Default::default(),
         };
         let filtered = super::filter_missing_tabs(sess);
         assert_eq!(filtered.open_tabs, vec![real]);

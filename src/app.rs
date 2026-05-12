@@ -75,6 +75,7 @@ pub struct IdeUltraApp {
     /// Active diff modal: (tab index, summary, file name shown in title).
     diff_modal: Option<(usize, DiffSummary, String)>,
     recent_files: RecentFiles,
+    recent_workspaces: RecentFiles,
     autosave_on_focus_loss: bool,
     /// Last-known viewport focus state. Auto-save fires on true → false.
     was_focused: bool,
@@ -151,6 +152,7 @@ impl IdeUltraApp {
             markdown_preview: loaded.settings.markdown_preview,
             diff_modal: None,
             recent_files: loaded.session.recent_files.clone(),
+            recent_workspaces: loaded.session.recent_workspaces.clone(),
             autosave_on_focus_loss: loaded.settings.autosave_on_focus_loss,
             was_focused: true,
             trim_whitespace_on_save: loaded.settings.trim_trailing_whitespace_on_save,
@@ -374,6 +376,7 @@ impl IdeUltraApp {
             recent_files: self.recent_files.clone(),
             pane2_active: self.pane2_active,
             focused_right: self.focused_right,
+            recent_workspaces: self.recent_workspaces.clone(),
         }
     }
 
@@ -473,16 +476,21 @@ impl IdeUltraApp {
 
     fn open_folder_dialog(&mut self) {
         if let Some(path) = rfd::FileDialog::new().pick_folder() {
-            match Workspace::open(&path) {
-                Ok(ws) => {
-                    tracing::info!(root = %ws.root.display(), "workspace opened");
-                    self.workspace = Some(ws);
-                    self.saver.mark_dirty();
-                }
-                Err(err) => {
-                    tracing::warn!(error = %err, "failed to open workspace");
-                    self.flash(format!("Could not open folder: {err}"));
-                }
+            self.open_workspace(&path);
+        }
+    }
+
+    fn open_workspace(&mut self, path: &Path) {
+        match Workspace::open(path) {
+            Ok(ws) => {
+                tracing::info!(root = %ws.root.display(), "workspace opened");
+                self.recent_workspaces.push(ws.root.clone());
+                self.workspace = Some(ws);
+                self.saver.mark_dirty();
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "failed to open workspace");
+                self.flash(format!("Could not open folder: {err}"));
             }
         }
     }
@@ -1645,12 +1653,19 @@ impl IdeUltraApp {
     }
 
     fn window_title(&self) -> String {
-        match self.tabs.get(self.active_tab) {
-            Some(tab) => {
-                let dot = if tab.is_dirty() { "● " } else { "" };
-                format!("{dot}{} — IdeUltra", tab.display_name)
-            }
-            None => "IdeUltra".to_string(),
+        let ws = self
+            .workspace
+            .as_ref()
+            .map(|w| w.display_name())
+            .unwrap_or_default();
+        let tab = self.tabs.get(self.active_tab);
+        let dot = tab.filter(|t| t.is_dirty()).map(|_| "● ").unwrap_or("");
+        let file = tab.map(|t| t.display_name.as_str()).unwrap_or("");
+        match (file.is_empty(), ws.is_empty()) {
+            (true, true) => "IdeUltra".to_string(),
+            (true, false) => format!("{ws} — IdeUltra"),
+            (false, true) => format!("{dot}{file} — IdeUltra"),
+            (false, false) => format!("{dot}{file} — {ws} — IdeUltra"),
         }
     }
 }
@@ -1744,7 +1759,7 @@ impl eframe::App for IdeUltraApp {
                         ui.close_menu();
                         self.open_folder_dialog();
                     }
-                    // Open Recent submenu — top 10 MRU entries.
+                    // Open Recent submenu — top 10 recent files.
                     let mut recent_to_open: Option<PathBuf> = None;
                     ui.menu_button("Open Recent", |ui| {
                         if self.recent_files.is_empty() {
@@ -1769,6 +1784,32 @@ impl eframe::App for IdeUltraApp {
                     });
                     if let Some(p) = recent_to_open {
                         self.open_file(&p);
+                    }
+                    // Open Recent Folder submenu — top 10 workspaces.
+                    let mut workspace_to_open: Option<PathBuf> = None;
+                    ui.menu_button("Open Recent Folder", |ui| {
+                        if self.recent_workspaces.is_empty() {
+                            ui.label(
+                                egui::RichText::new("Nothing yet").small().weak(),
+                            );
+                        } else {
+                            for p in self.recent_workspaces.top(10) {
+                                let label = display_recent(p);
+                                if ui.button(label).clicked() {
+                                    workspace_to_open = Some(p.to_path_buf());
+                                    ui.close_menu();
+                                }
+                            }
+                            ui.separator();
+                            if ui.button("Clear").clicked() {
+                                self.recent_workspaces.entries.clear();
+                                self.saver.mark_dirty();
+                                ui.close_menu();
+                            }
+                        }
+                    });
+                    if let Some(p) = workspace_to_open {
+                        self.open_workspace(&p);
                     }
                     ui.separator();
                     if ui.button("Save  ⌘S").clicked() {
